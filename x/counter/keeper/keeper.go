@@ -35,7 +35,7 @@ func (k *Keeper) InitGenesis(ctx context.Context, genesis *types.GenesisState) e
 
 func (k *Keeper) ExportGenesis(ctx context.Context) (*types.GenesisState, error) {
 	count, err := k.counter.Get(ctx)
-	if !errors.Is(err, collections.ErrNotFound) {
+	if err != nil && !errors.Is(err, collections.ErrNotFound) {
 		return nil, err
 	}
 	return &types.GenesisState{Count: count}, nil

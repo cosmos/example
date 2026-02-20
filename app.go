@@ -536,3 +536,8 @@ func (app *ExampleApp) GetKey(storeKey string) *storetypes.KVStoreKey {
 func (app *ExampleApp) LoadHeight(height int64) error {
 	return app.LoadVersion(height)
 }
+
+// DefaultGenesis returns a default genesis from the registered modules.
+func (app *ExampleApp) DefaultGenesis() GenesisState {
+	return app.BasicModuleManager.DefaultGenesis(app.appCodec)
+}
