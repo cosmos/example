@@ -1,0 +1,18 @@
+syntax = "proto3";
+package example.counter;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/cosmos/example/x/counter/types";
+
+service Query {
+  rpc Count(QueryCountRequest) returns (QueryCountResponse) {
+    option (google.api.http).get = "/example/counter/v1/count";
+  }
+}
+
+message QueryCountRequest {}
+
+message QueryCountResponse {
+  uint64 count = 1;
+}

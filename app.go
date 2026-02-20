@@ -40,6 +40,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/bank"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	consensus "github.com/cosmos/cosmos-sdk/x/consensus"
+	consensusparamkeeper "github.com/cosmos/cosmos-sdk/x/consensus/keeper"
+	consensusparamtypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
 	distr "github.com/cosmos/cosmos-sdk/x/distribution"
 	distrkeeper "github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
@@ -58,6 +61,9 @@ import (
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/cosmos/cosmos-sdk/x/tx/signing"
 	"github.com/cosmos/gogoproto/proto"
+
+	counter "github.com/cosmos/example/x/counter"
+	counterkeeper "github.com/cosmos/example/x/counter/keeper"
 )
 
 const (
@@ -98,12 +104,14 @@ type ExampleApp struct {
 	keys map[string]*storetypes.KVStoreKey
 
 	// Keepers
-	AccountKeeper  authkeeper.AccountKeeper
-	BankKeeper     bankkeeper.Keeper
-	DistrKeeper    distrkeeper.Keeper
-	GovKeeper      govkeeper.Keeper
-	StakingKeeper  *stakingkeeper.Keeper
-	SlashingKeeper slashingkeeper.Keeper
+	AccountKeeper         authkeeper.AccountKeeper
+	BankKeeper            bankkeeper.Keeper
+	DistrKeeper           distrkeeper.Keeper
+	GovKeeper             govkeeper.Keeper
+	StakingKeeper         *stakingkeeper.Keeper
+	SlashingKeeper        slashingkeeper.Keeper
+	ConsensusParamsKeeper consensusparamkeeper.Keeper
+	CounterKeeper         *counterkeeper.Keeper
 
 	// the module manager
 	ModuleManager      *module.Manager
@@ -150,7 +158,14 @@ func NewExampleApp(
 	bApp.SetTxEncoder(txConfig.TxEncoder())
 
 	keys := storetypes.NewKVStoreKeys(
+		authtypes.StoreKey,
 		banktypes.StoreKey,
+		stakingtypes.StoreKey,
+		distrtypes.StoreKey,
+		slashingtypes.StoreKey,
+		govtypes.StoreKey,
+		consensusparamtypes.StoreKey,
+		counter.StoreKey,
 	)
 
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -165,6 +180,15 @@ func NewExampleApp(
 		interfaceRegistry: interfaceRegistry,
 		keys:              keys,
 	}
+
+	// set the BaseApp's parameter store
+	app.ConsensusParamsKeeper = consensusparamkeeper.NewKeeper(
+		appCodec,
+		runtime.NewKVStoreService(keys[consensusparamtypes.StoreKey]),
+		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
+		runtime.EventService{},
+	)
+	bApp.SetParamStore(app.ConsensusParamsKeeper.ParamsStore)
 
 	app.AccountKeeper = authkeeper.NewAccountKeeper(
 		appCodec,
@@ -245,9 +269,11 @@ func NewExampleApp(
 
 	app.GovKeeper = *govKeeper.SetHooks(
 		govtypes.NewMultiGovHooks(
-		// register the governance hooks
+			// register the governance hooks
 		),
 	)
+
+	app.CounterKeeper = counterkeeper.NewKeeper(runtime.NewKVStoreService(keys[counter.StoreKey]), appCodec)
 
 	app.ModuleManager = module.NewManager(
 		genutil.NewAppModule(
@@ -257,9 +283,11 @@ func NewExampleApp(
 		auth.NewAppModule(appCodec, app.AccountKeeper, authsims.RandomGenesisAccounts, nil),
 		bank.NewAppModule(appCodec, app.BankKeeper, app.AccountKeeper, nil),
 		gov.NewAppModule(appCodec, &app.GovKeeper, app.AccountKeeper, app.BankKeeper, nil),
+		consensus.NewAppModule(appCodec, app.ConsensusParamsKeeper),
 		slashing.NewAppModule(appCodec, app.SlashingKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, nil, app.interfaceRegistry),
 		distr.NewAppModule(appCodec, app.DistrKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, nil),
 		staking.NewAppModule(appCodec, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, nil),
+		counter.NewAppModule(appCodec, app.CounterKeeper),
 	)
 
 	// BasicModuleManager defines the module BasicManager is in charge of setting up basic,
@@ -273,7 +301,9 @@ func NewExampleApp(
 			govtypes.ModuleName: gov.NewAppModuleBasic(
 				[]govclient.ProposalHandler{},
 			),
-		})
+		},
+	)
+
 	app.BasicModuleManager.RegisterLegacyAminoCodec(legacyAmino)
 	app.BasicModuleManager.RegisterInterfaces(interfaceRegistry)
 
@@ -302,16 +332,20 @@ func NewExampleApp(
 		stakingtypes.ModuleName,
 		slashingtypes.ModuleName,
 		govtypes.ModuleName,
+		consensusparamtypes.ModuleName,
+		counter.ModuleName,
 		genutiltypes.ModuleName,
 	}
 
 	exportModuleOrder := []string{
+		consensusparamtypes.ModuleName,
 		authtypes.ModuleName,
 		banktypes.ModuleName,
 		distrtypes.ModuleName,
 		stakingtypes.ModuleName,
 		slashingtypes.ModuleName,
 		govtypes.ModuleName,
+		counter.ModuleName,
 		genutiltypes.ModuleName,
 	}
 

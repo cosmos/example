@@ -1,0 +1,11 @@
+syntax = "proto3";
+package example.counter;
+
+import "cosmos/msg/v1/msg.proto";
+
+option go_package = "github.com/cosmos/example/x/counter/types";
+
+
+message GenesisState {
+  uint64 count = 1;
+}

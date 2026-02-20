@@ -1,0 +1,20 @@
+syntax = "proto3";
+package example.counter;
+
+import "cosmos/msg/v1/msg.proto";
+
+option go_package = "github.com/cosmos/example/x/counter/types";
+
+service Msg {
+  rpc Add(MsgAddRequest) returns (MsgAddResponse);
+}
+
+message MsgAddRequest {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1;
+  uint64 add = 2;
+}
+
+message MsgAddResponse {
+  uint64 updated_count = 1;
+}

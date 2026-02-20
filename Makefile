@@ -1,5 +1,26 @@
+DOCKER := $(shell which docker)
+PROTO_BUILDER_IMAGE := example-proto-builder
+
 build:
-	go build cmd
+	go build -o ./build/myapp ./exampled
+
+
+install:
+	go install ./exampled
+
+start: install
+	./scripts/local_node.sh
+	exampled start
+
+
+proto-image-build:
+	@docker build -t $(PROTO_BUILDER_IMAGE) -f proto/Dockerfile .
+
+proto-gen:
+	@echo "Generating Protobuf files"
+	@$(DOCKER) run --rm -u 0 -v $(CURDIR):/workspace --workdir /workspace $(PROTO_BUILDER_IMAGE) sh ./scripts/protocgen.sh
+
+.PHONY: build install start proto-image-build proto-gen
 
 ###############################################################################
 ###                                Linting                                  ###
@@ -22,3 +43,38 @@ lint-fix:
 	@golangci-lint run ./... --fix
 
 .PHONY: lint lint-fix
+
+###############################################################################
+###                              Docker / Localnet                          ###
+###############################################################################
+
+DOCKER_IMAGE := example-node
+
+build-docker:
+	@echo "--> Building Docker image $(DOCKER_IMAGE)"
+	docker build -t $(DOCKER_IMAGE) .
+
+localnet-init: build-docker
+	@echo "--> Initializing localnet"
+	@chmod +x scripts/localnet/init.sh
+	@./scripts/localnet/init.sh
+
+localnet-start:
+	@echo "--> Starting localnet"
+	docker compose up -d
+
+localnet-stop:
+	@echo "--> Stopping localnet"
+	docker compose down
+
+localnet-clean:
+	@echo "--> Cleaning localnet data"
+	rm -rf ./build/localnet
+
+localnet-logs:
+	docker compose logs -f
+
+localnet: localnet-init localnet-start
+	@echo "--> Localnet is running"
+
+.PHONY: build-docker localnet-init localnet-start localnet-stop localnet-clean localnet-logs localnet
