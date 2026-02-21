@@ -7,8 +7,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/suite"
 
-	example "github.com/cosmos/example"
-	"github.com/cosmos/example/x/counter"
+	"github.com/cosmos/example"
 	"github.com/cosmos/example/x/counter/keeper"
 	countertypes "github.com/cosmos/example/x/counter/types"
 
@@ -92,7 +91,7 @@ func (s *CounterIntegrationTestSuite) TestCounterMultipleAdds() {
 func (s *CounterIntegrationTestSuite) TestCounterWithCustomGenesis() {
 	app := SetupWithCustomGenesis(s.T(), func(gs example.GenesisState) example.GenesisState {
 		counterGenesis := countertypes.GenesisState{Count: 1000}
-		gs[counter.ModuleName] = s.app.AppCodec().MustMarshalJSON(&counterGenesis)
+		gs[countertypes.ModuleName] = s.app.AppCodec().MustMarshalJSON(&counterGenesis)
 		return gs
 	})
 

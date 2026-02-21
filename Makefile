@@ -20,7 +20,10 @@ proto-gen:
 	@echo "Generating Protobuf files"
 	@$(DOCKER) run --rm -u 0 -v $(CURDIR):/workspace --workdir /workspace $(PROTO_BUILDER_IMAGE) sh ./scripts/protocgen.sh
 
-.PHONY: build install start proto-image-build proto-gen
+test:
+	go test ./...
+
+.PHONY: build install start test proto-image-build proto-gen
 
 ###############################################################################
 ###                                Linting                                  ###
@@ -43,6 +46,24 @@ lint-fix:
 	@golangci-lint run ./... --fix
 
 .PHONY: lint lint-fix
+
+###############################################################################
+###                                Simulation                               ###
+###############################################################################
+
+test-sim-full:
+	@echo "--> Running full app simulation"
+	go test -tags sims -run TestFullAppSimulation -v -timeout 30m
+
+test-sim-determinism:
+	@echo "--> Running determinism simulation"
+	go test -tags sims -run TestAppStateDeterminism -v -timeout 30m
+
+test-sim:
+	@echo "--> Running all simulation tests"
+	go test -tags sims -v -timeout 60m
+
+.PHONY: test-sim-full test-sim-determinism test-sim
 
 ###############################################################################
 ###                              Docker / Localnet                          ###

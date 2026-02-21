@@ -37,6 +37,8 @@ import (
 	authsims "github.com/cosmos/cosmos-sdk/x/auth/simulation"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/cosmos/cosmos-sdk/x/auth/vesting"
+	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
 	"github.com/cosmos/cosmos-sdk/x/bank"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
@@ -64,6 +66,7 @@ import (
 
 	counter "github.com/cosmos/example/x/counter"
 	counterkeeper "github.com/cosmos/example/x/counter/keeper"
+	countertypes "github.com/cosmos/example/x/counter/types"
 )
 
 const (
@@ -117,6 +120,9 @@ type ExampleApp struct {
 	ModuleManager      *module.Manager
 	BasicModuleManager module.BasicManager
 
+	// simulation manager
+	sm *module.SimulationManager
+
 	// module configurator
 	configurator module.Configurator
 }
@@ -165,7 +171,7 @@ func NewExampleApp(
 		slashingtypes.StoreKey,
 		govtypes.StoreKey,
 		consensusparamtypes.StoreKey,
-		counter.StoreKey,
+		countertypes.StoreKey,
 	)
 
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -273,7 +279,7 @@ func NewExampleApp(
 		),
 	)
 
-	app.CounterKeeper = counterkeeper.NewKeeper(runtime.NewKVStoreService(keys[counter.StoreKey]), appCodec)
+	app.CounterKeeper = counterkeeper.NewKeeper(runtime.NewKVStoreService(keys[countertypes.StoreKey]), appCodec)
 
 	app.ModuleManager = module.NewManager(
 		genutil.NewAppModule(
@@ -287,6 +293,7 @@ func NewExampleApp(
 		slashing.NewAppModule(appCodec, app.SlashingKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, nil, app.interfaceRegistry),
 		distr.NewAppModule(appCodec, app.DistrKeeper, app.AccountKeeper, app.BankKeeper, app.StakingKeeper, nil),
 		staking.NewAppModule(appCodec, app.StakingKeeper, app.AccountKeeper, app.BankKeeper, nil),
+		vesting.NewAppModule(app.AccountKeeper, app.BankKeeper),
 		counter.NewAppModule(appCodec, app.CounterKeeper),
 	)
 
@@ -306,6 +313,13 @@ func NewExampleApp(
 
 	app.BasicModuleManager.RegisterLegacyAminoCodec(legacyAmino)
 	app.BasicModuleManager.RegisterInterfaces(interfaceRegistry)
+
+	// create the simulation manager and define the order of the modules for deterministic simulations
+	overrideModules := map[string]module.AppModuleSimulation{
+		authtypes.ModuleName: auth.NewAppModule(appCodec, app.AccountKeeper, authsims.RandomGenesisAccounts, nil),
+	}
+	app.sm = module.NewSimulationManagerFromAppModules(app.ModuleManager.Modules, overrideModules)
+	app.sm.RegisterStoreDecoders()
 
 	app.ModuleManager.SetOrderPreBlockers(
 		authtypes.ModuleName,
@@ -333,7 +347,8 @@ func NewExampleApp(
 		slashingtypes.ModuleName,
 		govtypes.ModuleName,
 		consensusparamtypes.ModuleName,
-		counter.ModuleName,
+		vestingtypes.ModuleName,
+		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 
@@ -345,7 +360,8 @@ func NewExampleApp(
 		stakingtypes.ModuleName,
 		slashingtypes.ModuleName,
 		govtypes.ModuleName,
-		counter.ModuleName,
+		vestingtypes.ModuleName,
+		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 
@@ -498,7 +514,7 @@ func (app *ExampleApp) InitChainer(ctx sdk.Context, req *abci.RequestInitChain) 
 }
 
 func (app *ExampleApp) SimulationManager() *module.SimulationManager {
-	return nil
+	return app.sm
 }
 
 func (app *ExampleApp) InterfaceRegistry() codectypes.InterfaceRegistry {

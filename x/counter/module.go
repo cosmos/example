@@ -7,21 +7,21 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/testutil/simsx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/module"
-	"github.com/cosmos/example/x/counter/keeper"
-	countertypes "github.com/cosmos/example/x/counter/types"
+	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-)
 
-const (
-	ModuleName = "counter"
-	StoreKey   = ModuleName
+	"github.com/cosmos/example/x/counter/keeper"
+	"github.com/cosmos/example/x/counter/simulation"
+	countertypes "github.com/cosmos/example/x/counter/types"
 )
 
 var (
-	_ module.AppModuleBasic   = AppModuleBasic{}
-	_ module.HasGenesisBasics = AppModuleBasic{}
+	_ module.AppModuleBasic      = AppModuleBasic{}
+	_ module.HasGenesisBasics    = AppModuleBasic{}
+	_ module.AppModuleSimulation = AppModule{}
 
 	_ appmodule.AppModule        = AppModule{}
 	_ module.HasConsensusVersion = AppModule{}
@@ -44,7 +44,7 @@ func (a AppModuleBasic) ValidateGenesis(jsonCodec codec.JSONCodec, _ client.TxEn
 }
 
 func (a AppModuleBasic) Name() string {
-	return ModuleName
+	return countertypes.ModuleName
 }
 
 func (a AppModuleBasic) RegisterLegacyAminoCodec(amino *codec.LegacyAmino) {}
@@ -111,3 +111,25 @@ func (a AppModule) ConsensusVersion() uint64 { return 1 }
 func (a AppModule) IsOnePerModuleType() {}
 
 func (a AppModule) IsAppModule() {}
+
+// AppModuleSimulation functions
+
+// GenerateGenesisState creates a randomized GenState of the counter module.
+func (AppModule) GenerateGenesisState(simState *module.SimulationState) {
+	simulation.RandomizedGenState(simState)
+}
+
+// RegisterStoreDecoder registers a decoder for counter module's types.
+func (a AppModule) RegisterStoreDecoder(sdr simtypes.StoreDecoderRegistry) {
+	sdr[countertypes.StoreKey] = simtypes.NewStoreDecoderFuncFromCollectionsSchema(a.keeper.Schema)
+}
+
+// WeightedOperations returns nil - use WeightedOperationsX instead.
+func (a AppModule) WeightedOperations(_ module.SimulationState) []simtypes.WeightedOperation {
+	return nil
+}
+
+// WeightedOperationsX registers weighted counter module operations for simulation.
+func (a AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Registry) {
+	reg.Add(weights.Get("msg_add", 100), simulation.MsgAddFactory())
+}

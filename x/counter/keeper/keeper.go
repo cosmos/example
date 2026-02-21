@@ -10,10 +10,8 @@ import (
 	"github.com/cosmos/example/x/counter/types"
 )
 
-type State struct {
-	foo int
-}
 type Keeper struct {
+	Schema  collections.Schema
 	counter collections.Item[uint64]
 }
 
@@ -22,10 +20,11 @@ func NewKeeper(storeService store.KVStoreService, cdc codec.Codec) *Keeper {
 	k := Keeper{
 		counter: collections.NewItem(sb, collections.NewPrefix(0), "counter", collections.Uint64Value),
 	}
-	_, err := sb.Build()
+	schema, err := sb.Build()
 	if err != nil {
 		panic(err)
 	}
+	k.Schema = schema
 	return &k
 }
 
