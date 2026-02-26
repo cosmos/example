@@ -83,6 +83,7 @@ var (
 	maccPerms = map[string][]string{
 		authtypes.FeeCollectorName:     nil,
 		distrtypes.ModuleName:          nil,
+		countertypes.ModuleName:        nil,
 		stakingtypes.BondedPoolName:    {authtypes.Burner, authtypes.Staking},
 		stakingtypes.NotBondedPoolName: {authtypes.Burner, authtypes.Staking},
 		govtypes.ModuleName:            {authtypes.Burner},
@@ -275,11 +276,11 @@ func NewExampleApp(
 
 	app.GovKeeper = *govKeeper.SetHooks(
 		govtypes.NewMultiGovHooks(
-			// register the governance hooks
+		// register the governance hooks
 		),
 	)
 
-	app.CounterKeeper = counterkeeper.NewKeeper(runtime.NewKVStoreService(keys[countertypes.StoreKey]), appCodec)
+	app.CounterKeeper = counterkeeper.NewKeeper(runtime.NewKVStoreService(keys[countertypes.StoreKey]), appCodec, app.BankKeeper)
 
 	app.ModuleManager = module.NewManager(
 		genutil.NewAppModule(
@@ -328,12 +329,14 @@ func NewExampleApp(
 		distrtypes.ModuleName,
 		slashingtypes.ModuleName,
 		stakingtypes.ModuleName,
+		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	)
 	app.ModuleManager.SetOrderEndBlockers(
 		banktypes.ModuleName,
 		govtypes.ModuleName,
 		stakingtypes.ModuleName,
+		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	)
 	// NOTE: The genutils module must occur after staking so that pools are

@@ -1,6 +1,7 @@
 package counter
 
 import (
+	"context"
 	"encoding/json"
 
 	"cosmossdk.io/core/appmodule"
@@ -27,6 +28,8 @@ var (
 	_ module.HasConsensusVersion = AppModule{}
 	_ module.HasGenesis          = AppModule{}
 	_ module.HasServices         = AppModule{}
+	_ appmodule.HasEndBlocker    = AppModule{}
+	_ appmodule.HasBeginBlocker  = AppModule{}
 )
 
 type AppModuleBasic struct {
@@ -34,7 +37,13 @@ type AppModuleBasic struct {
 }
 
 func (a AppModuleBasic) DefaultGenesis(jsonCodec codec.JSONCodec) json.RawMessage {
-	gs := countertypes.GenesisState{}
+	gs := countertypes.GenesisState{
+		Count: 0,
+		Params: countertypes.Params{
+			MaxAddValue: 100,
+			AddCost:     sdk.NewCoins(sdk.NewInt64Coin(sdk.DefaultBondDenom, 100)),
+		},
+	}
 	return jsonCodec.MustMarshalJSON(&gs)
 }
 
@@ -64,6 +73,14 @@ type AppModule struct {
 	AppModuleBasic
 }
 
+func (a AppModule) BeginBlock(ctx context.Context) error {
+	return nil
+}
+
+func (a AppModule) EndBlock(ctx context.Context) error {
+	return nil
+}
+
 func NewAppModule(cdc codec.Codec, keeper *keeper.Keeper) AppModule {
 	return AppModule{
 		keeper:         keeper,
@@ -74,20 +91,6 @@ func NewAppModule(cdc codec.Codec, keeper *keeper.Keeper) AppModule {
 func (a AppModule) RegisterServices(configurator module.Configurator) {
 	countertypes.RegisterMsgServer(configurator.MsgServer(), keeper.NewMsgServerImpl(a.keeper))
 	countertypes.RegisterQueryServer(configurator.QueryServer(), keeper.NewQueryServer(a.keeper))
-}
-
-func (a AppModule) DefaultGenesis(jsonCodec codec.JSONCodec) json.RawMessage {
-	gs := countertypes.GenesisState{Count: 0}
-	return jsonCodec.MustMarshalJSON(&gs)
-
-}
-
-func (a AppModule) ValidateGenesis(jsonCodec codec.JSONCodec, config client.TxEncodingConfig, message json.RawMessage) error {
-	gs := &countertypes.GenesisState{}
-	if err := jsonCodec.UnmarshalJSON(message, gs); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (a AppModule) InitGenesis(ctx sdk.Context, jsonCodec codec.JSONCodec, message json.RawMessage) {

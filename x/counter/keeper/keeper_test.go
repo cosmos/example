@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	"context"
 	"testing"
 
 	cmtproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -19,6 +20,18 @@ import (
 	"github.com/cosmos/example/x/counter/types"
 )
 
+// MockBankKeeper is a mock implementation of the BankKeeper interface
+type MockBankKeeper struct {
+	SendCoinsFromAccountToModuleFn func(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
+}
+
+func (m *MockBankKeeper) SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error {
+	if m.SendCoinsFromAccountToModuleFn != nil {
+		return m.SendCoinsFromAccountToModuleFn(ctx, senderAddr, recipientModule, amt)
+	}
+	return nil
+}
+
 type KeeperTestSuite struct {
 	suite.Suite
 
@@ -26,6 +39,8 @@ type KeeperTestSuite struct {
 	keeper      *keeper.Keeper
 	queryClient types.QueryClient
 	msgServer   types.MsgServer
+	bankKeeper  *MockBankKeeper
+	authority   string
 }
 
 func (s *KeeperTestSuite) SetupTest() {
@@ -35,7 +50,9 @@ func (s *KeeperTestSuite) SetupTest() {
 	ctx := testCtx.Ctx.WithBlockHeader(cmtproto.Header{Time: cmttime.Now()})
 	encCfg := moduletestutil.MakeTestEncodingConfig()
 
-	k := keeper.NewKeeper(storeService, encCfg.Codec)
+	s.authority = "cosmos10d07y265gmmuvt4z0w9aw880jnsr700j6zn9kn"
+	s.bankKeeper = &MockBankKeeper{}
+	k := keeper.NewKeeper(storeService, encCfg.Codec, s.bankKeeper, keeper.WithAuthority(s.authority))
 
 	s.ctx = ctx
 	s.keeper = k
@@ -62,6 +79,17 @@ func (s *KeeperTestSuite) TestInitGenesis() {
 			genesis: &types.GenesisState{Count: 100},
 			expErr:  false,
 		},
+		{
+			name: "with params",
+			genesis: &types.GenesisState{
+				Count: 50,
+				Params: types.Params{
+					MaxAddValue: 1000,
+					AddCost:     sdk.NewCoins(sdk.NewInt64Coin("stake", 100)),
+				},
+			},
+			expErr: false,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -79,9 +107,10 @@ func (s *KeeperTestSuite) TestInitGenesis() {
 
 func (s *KeeperTestSuite) TestExportGenesis() {
 	testCases := []struct {
-		name     string
-		setup    func()
-		expCount uint64
+		name      string
+		setup     func()
+		expCount  uint64
+		expParams types.Params
 	}{
 		{
 			name: "export after init with zero",
@@ -89,7 +118,8 @@ func (s *KeeperTestSuite) TestExportGenesis() {
 				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{Count: 0})
 				s.Require().NoError(err)
 			},
-			expCount: 0,
+			expCount:  0,
+			expParams: types.Params{},
 		},
 		{
 			name: "export after init with value",
@@ -97,7 +127,26 @@ func (s *KeeperTestSuite) TestExportGenesis() {
 				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{Count: 42})
 				s.Require().NoError(err)
 			},
-			expCount: 42,
+			expCount:  42,
+			expParams: types.Params{},
+		},
+		{
+			name: "export with params",
+			setup: func() {
+				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{
+					Count: 100,
+					Params: types.Params{
+						MaxAddValue: 500,
+						AddCost:     sdk.NewCoins(sdk.NewInt64Coin("stake", 50)),
+					},
+				})
+				s.Require().NoError(err)
+			},
+			expCount: 100,
+			expParams: types.Params{
+				MaxAddValue: 500,
+				AddCost:     sdk.NewCoins(sdk.NewInt64Coin("stake", 50)),
+			},
 		},
 	}
 
@@ -109,6 +158,7 @@ func (s *KeeperTestSuite) TestExportGenesis() {
 			genesis, err := s.keeper.ExportGenesis(s.ctx)
 			s.Require().NoError(err)
 			s.Require().Equal(tc.expCount, genesis.Count)
+			s.Require().Equal(tc.expParams, genesis.Params)
 		})
 	}
 }

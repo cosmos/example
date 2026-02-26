@@ -1,163 +1,231 @@
 package tests
 
 import (
-	"encoding/json"
+	"context"
 	"testing"
 
-	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/cosmos/example"
-	"github.com/cosmos/example/x/counter/keeper"
-	countertypes "github.com/cosmos/example/x/counter/types"
-
+	"github.com/cosmos/cosmos-sdk/client"
+	clienttx "github.com/cosmos/cosmos-sdk/client/tx"
+	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/testutil/network"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	txtypes "github.com/cosmos/cosmos-sdk/types/tx"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
+	authclient "github.com/cosmos/cosmos-sdk/x/auth/client"
+
+	countertypes "github.com/cosmos/example/x/counter/types"
 )
 
-type CounterIntegrationTestSuite struct {
+type E2ETestSuite struct {
 	suite.Suite
-	app *example.ExampleApp
-	ctx sdk.Context
+
+	cfg     network.Config
+	network *network.Network
+	conn    *grpc.ClientConn
 }
 
-func (s *CounterIntegrationTestSuite) SetupTest() {
-	s.app = Setup(s.T())
-	s.ctx = s.app.NewContext(false)
+func (s *E2ETestSuite) SetupSuite() {
+	s.T().Log("setting up e2e test suite")
+
+	var err error
+	s.cfg = network.DefaultConfig(NewTestNetworkFixture)
+	s.cfg.NumValidators = 1
+
+	// Customize counter genesis to set initial count and permissive params
+	genesisState := s.cfg.GenesisState
+	counterGenesis := countertypes.GenesisState{
+		Count: 0,
+		Params: countertypes.Params{
+			MaxAddValue: 1000,
+			AddCost:     nil, // No cost for testing
+		},
+	}
+	counterGenesisBz, err := s.cfg.Codec.MarshalJSON(&counterGenesis)
+	s.Require().NoError(err)
+	genesisState[countertypes.ModuleName] = counterGenesisBz
+	s.cfg.GenesisState = genesisState
+
+	s.network, err = network.New(s.T(), s.T().TempDir(), s.cfg)
+	s.Require().NoError(err)
+
+	_, err = s.network.WaitForHeight(2)
+	s.Require().NoError(err)
+
+	val0 := s.network.Validators[0]
+	s.conn, err = grpc.NewClient(
+		val0.AppConfig.GRPC.Address,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(codec.NewProtoCodec(s.cfg.InterfaceRegistry).GRPCCodec())),
+	)
+	s.Require().NoError(err)
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterInitialState() {
-	resp, err := s.app.CounterKeeper.ExportGenesis(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(0), resp.Count)
+func (s *E2ETestSuite) TearDownSuite() {
+	s.T().Log("tearing down e2e test suite")
+	s.conn.Close()
+	s.network.Cleanup()
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterAddViaKeeper() {
-	err := s.app.CounterKeeper.InitGenesis(s.ctx, &countertypes.GenesisState{Count: 10})
+// getCurrentCount is a helper to get the current counter value
+func (s *E2ETestSuite) getCurrentCount() uint64 {
+	queryClient := countertypes.NewQueryClient(s.conn)
+	resp, err := queryClient.Count(context.Background(), &countertypes.QueryCountRequest{})
 	s.Require().NoError(err)
-
-	resp, err := s.app.CounterKeeper.ExportGenesis(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(10), resp.Count)
+	return resp.Count
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterQueryServer() {
-	err := s.app.CounterKeeper.InitGenesis(s.ctx, &countertypes.GenesisState{Count: 42})
-	s.Require().NoError(err)
+// TestQueryCount tests querying the counter via gRPC
+func (s *E2ETestSuite) TestQueryCount() {
+	queryClient := countertypes.NewQueryClient(s.conn)
 
-	queryServer := keeper.NewQueryServer(s.app.CounterKeeper)
-	resp, err := queryServer.Count(s.ctx, &countertypes.QueryCountRequest{})
+	// Just verify we can query - the value depends on test execution order
+	resp, err := queryClient.Count(context.Background(), &countertypes.QueryCountRequest{})
 	s.Require().NoError(err)
-	s.Require().Equal(uint64(42), resp.Count)
+	s.Require().NotNil(resp)
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterMsgServiceDirect() {
-	err := s.app.CounterKeeper.InitGenesis(s.ctx, &countertypes.GenesisState{Count: 0})
-	s.Require().NoError(err)
+// TestQueryParams tests querying the module params via gRPC
+func (s *E2ETestSuite) TestQueryParams() {
+	queryClient := countertypes.NewQueryClient(s.conn)
 
-	msgServer := s.app.MsgServiceRouter().Handler(&countertypes.MsgAddRequest{})
-	s.Require().NotNil(msgServer)
-
-	result, err := msgServer(s.ctx, &countertypes.MsgAddRequest{
-		Sender: "cosmos1test",
-		Add:    100,
-	})
+	resp, err := queryClient.Params(context.Background(), &countertypes.QueryParamsRequest{})
 	s.Require().NoError(err)
-	s.Require().NotNil(result)
-
-	resp, err := s.app.CounterKeeper.ExportGenesis(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(100), resp.Count)
+	s.Require().NotNil(resp)
+	s.Require().NotNil(resp.Params)
+	// Verify the params match what was set in genesis
+	s.Require().Equal(uint64(1000), resp.Params.MaxAddValue)
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterMultipleAdds() {
-	err := s.app.CounterKeeper.InitGenesis(s.ctx, &countertypes.GenesisState{Count: 0})
+// TestAddCounter tests broadcasting an Add transaction via gRPC
+func (s *E2ETestSuite) TestAddCounter() {
+	val := s.network.Validators[0]
+
+	// Query initial count
+	initialCount := s.getCurrentCount()
+
+	// Build and broadcast Add transaction
+	txBuilder := s.mkCounterAddTx(val, 42)
+	txBytes, err := val.ClientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
 	s.Require().NoError(err)
 
-	msgServer := s.app.MsgServiceRouter().Handler(&countertypes.MsgAddRequest{})
+	txClient := txtypes.NewServiceClient(s.conn)
+	grpcRes, err := txClient.BroadcastTx(
+		context.Background(),
+		&txtypes.BroadcastTxRequest{
+			Mode:    txtypes.BroadcastMode_BROADCAST_MODE_SYNC,
+			TxBytes: txBytes,
+		},
+	)
+	s.Require().NoError(err)
+	s.Require().Equal(uint32(0), grpcRes.TxResponse.Code, "tx failed: %s", grpcRes.TxResponse.RawLog)
 
-	for i := 0; i < 5; i++ {
-		_, err := msgServer(s.ctx, &countertypes.MsgAddRequest{
-			Sender: "cosmos1test",
-			Add:    10,
-		})
+	// Wait for tx to be included in a block
+	s.Require().NoError(s.network.WaitForNextBlock())
+
+	// Query updated count - should have increased by 42
+	finalCount := s.getCurrentCount()
+	s.Require().Equal(initialCount+42, finalCount)
+}
+
+// TestMultipleAdds tests broadcasting multiple Add transactions
+func (s *E2ETestSuite) TestMultipleAdds() {
+	val := s.network.Validators[0]
+
+	// Query initial count
+	initialCount := s.getCurrentCount()
+
+	// Send multiple add transactions
+	addValues := []uint64{10, 20, 30}
+	for _, addValue := range addValues {
+		txBuilder := s.mkCounterAddTx(val, addValue)
+		txBytes, err := val.ClientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
 		s.Require().NoError(err)
+
+		txClient := txtypes.NewServiceClient(s.conn)
+		grpcRes, err := txClient.BroadcastTx(
+			context.Background(),
+			&txtypes.BroadcastTxRequest{
+				Mode:    txtypes.BroadcastMode_BROADCAST_MODE_SYNC,
+				TxBytes: txBytes,
+			},
+		)
+		s.Require().NoError(err)
+		s.Require().Equal(uint32(0), grpcRes.TxResponse.Code, "tx failed: %s", grpcRes.TxResponse.RawLog)
+
+		// Wait for each tx
+		s.Require().NoError(s.network.WaitForNextBlock())
 	}
 
-	resp, err := s.app.CounterKeeper.ExportGenesis(s.ctx)
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(50), resp.Count)
+	// Query final count - should have increased by 60
+	finalCount := s.getCurrentCount()
+	s.Require().Equal(initialCount+10+20+30, finalCount)
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterWithCustomGenesis() {
-	app := SetupWithCustomGenesis(s.T(), func(gs example.GenesisState) example.GenesisState {
-		counterGenesis := countertypes.GenesisState{Count: 1000}
-		gs[countertypes.ModuleName] = s.app.AppCodec().MustMarshalJSON(&counterGenesis)
-		return gs
-	})
+// TestAddExceedsMaxValue tests that adding more than MaxAddValue fails
+func (s *E2ETestSuite) TestAddExceedsMaxValue() {
+	val := s.network.Validators[0]
 
-	ctx := app.NewContext(false)
-	resp, err := app.CounterKeeper.ExportGenesis(ctx)
+	// Query initial count
+	initialCount := s.getCurrentCount()
+
+	// Try to add more than MaxAddValue (1000)
+	txBuilder := s.mkCounterAddTx(val, 1001)
+	txBytes, err := val.ClientCtx.TxConfig.TxEncoder()(txBuilder.GetTx())
 	s.Require().NoError(err)
-	s.Require().Equal(uint64(1000), resp.Count)
+
+	txClient := txtypes.NewServiceClient(s.conn)
+	_, err = txClient.BroadcastTx(
+		context.Background(),
+		&txtypes.BroadcastTxRequest{
+			Mode:    txtypes.BroadcastMode_BROADCAST_MODE_SYNC,
+			TxBytes: txBytes,
+		},
+	)
+	s.Require().NoError(err)
+	// Note: SYNC broadcast only checks if tx was accepted to mempool
+	// The actual validation error occurs in DeliverTx
+
+	// Wait for the block
+	s.Require().NoError(s.network.WaitForNextBlock())
+
+	// The count should NOT have increased (tx should have failed in DeliverTx)
+	finalCount := s.getCurrentCount()
+	s.Require().Equal(initialCount, finalCount, "counter should not have changed when tx fails validation")
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterStatePersistedAcrossBlocks() {
-	msgServer := keeper.NewMsgServerImpl(s.app.CounterKeeper)
+// mkCounterAddTx creates a signed MsgAddRequest transaction
+func (s *E2ETestSuite) mkCounterAddTx(val *network.Validator, addValue uint64) client.TxBuilder {
+	s.Require().NoError(s.network.WaitForNextBlock())
 
-	_, err := msgServer.Add(s.ctx, &countertypes.MsgAddRequest{
-		Sender: "cosmos1test",
-		Add:    25,
-	})
+	txBuilder := val.ClientCtx.TxConfig.NewTxBuilder()
+	feeAmount := sdk.Coins{sdk.NewInt64Coin(s.cfg.BondDenom, 10)}
+	gasLimit := uint64(200000)
+
+	s.Require().NoError(
+		txBuilder.SetMsgs(&countertypes.MsgAddRequest{
+			Sender: val.Address.String(),
+			Add:    addValue,
+		}),
+	)
+	txBuilder.SetFeeAmount(feeAmount)
+	txBuilder.SetGasLimit(gasLimit)
+
+	txFactory := clienttx.Factory{}.
+		WithChainID(val.ClientCtx.ChainID).
+		WithKeybase(val.ClientCtx.Keyring).
+		WithTxConfig(val.ClientCtx.TxConfig).
+		WithSignMode(signing.SignMode_SIGN_MODE_DIRECT)
+
+	err := authclient.SignTx(txFactory, val.ClientCtx, val.Moniker, txBuilder, false, true)
 	s.Require().NoError(err)
 
-	_, err = s.app.FinalizeBlock(&abci.RequestFinalizeBlock{
-		Height: s.app.LastBlockHeight() + 1,
-		Hash:   s.app.LastCommitID().Hash,
-	})
-	s.Require().NoError(err)
-
-	_, err = s.app.Commit()
-	s.Require().NoError(err)
-
-	_, err = s.app.FinalizeBlock(&abci.RequestFinalizeBlock{
-		Height: s.app.LastBlockHeight() + 1,
-		Hash:   s.app.LastCommitID().Hash,
-	})
-	s.Require().NoError(err)
-
-	newCtx := s.app.NewContext(false)
-	resp, err := s.app.CounterKeeper.ExportGenesis(newCtx)
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(25), resp.Count)
-
-	_, err = msgServer.Add(newCtx, &countertypes.MsgAddRequest{
-		Sender: "cosmos1test",
-		Add:    15,
-	})
-	s.Require().NoError(err)
-
-	resp, err = s.app.CounterKeeper.ExportGenesis(newCtx)
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(40), resp.Count)
+	return txBuilder
 }
 
-func (s *CounterIntegrationTestSuite) TestCounterGenesisExportImport() {
-	err := s.app.CounterKeeper.InitGenesis(s.ctx, &countertypes.GenesisState{Count: 999})
-	s.Require().NoError(err)
-
-	exported, err := s.app.CounterKeeper.ExportGenesis(s.ctx)
-	s.Require().NoError(err)
-
-	exportedBytes, err := json.Marshal(exported)
-	s.Require().NoError(err)
-
-	var imported countertypes.GenesisState
-	err = json.Unmarshal(exportedBytes, &imported)
-	s.Require().NoError(err)
-
-	s.Require().Equal(uint64(999), imported.Count)
-}
-
-func TestCounterIntegrationTestSuite(t *testing.T) {
-	suite.Run(t, new(CounterIntegrationTestSuite))
+func TestE2ETestSuite(t *testing.T) {
+	suite.Run(t, new(E2ETestSuite))
 }

@@ -23,3 +23,11 @@ func (q queryServer) Count(ctx context.Context, request *types.QueryCountRequest
 	}
 	return &types.QueryCountResponse{Count: count}, nil
 }
+
+func (q queryServer) Params(ctx context.Context, request *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
+	params, err := q.params.Get(ctx)
+	if err != nil && !errors.Is(err, collections.ErrNotFound) {
+		return nil, err
+	}
+	return &types.QueryParamsResponse{Params: &params}, nil
+}

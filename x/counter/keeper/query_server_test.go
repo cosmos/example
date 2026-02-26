@@ -1,6 +1,7 @@
 package keeper_test
 
 import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/example/x/counter/types"
 )
 
@@ -35,7 +36,10 @@ func (s *KeeperTestSuite) TestQueryCount() {
 		{
 			name: "query after add",
 			setup: func() {
-				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{Count: 10})
+				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{
+					Count:  10,
+					Params: types.Params{MaxAddValue: 100},
+				})
 				s.Require().NoError(err)
 				_, err = s.msgServer.Add(s.ctx, &types.MsgAddRequest{Sender: "cosmos1test", Add: 5})
 				s.Require().NoError(err)
@@ -63,15 +67,59 @@ func (s *KeeperTestSuite) TestQueryCount() {
 	}
 }
 
-func (s *KeeperTestSuite) TestQueryCountDirectKeeper() {
-	s.SetupTest()
-	err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{Count: 123})
-	s.Require().NoError(err)
+func (s *KeeperTestSuite) TestQueryParams() {
+	testCases := []struct {
+		name      string
+		setup     func()
+		req       *types.QueryParamsRequest
+		expErr    bool
+		expParams types.Params
+	}{
+		{
+			name: "query default params",
+			setup: func() {
+				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{})
+				s.Require().NoError(err)
+			},
+			req:       &types.QueryParamsRequest{},
+			expErr:    false,
+			expParams: types.Params{},
+		},
+		{
+			name: "query custom params",
+			setup: func() {
+				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{
+					Params: types.Params{
+						MaxAddValue: 500,
+						AddCost:     sdk.NewCoins(sdk.NewInt64Coin("stake", 100)),
+					},
+				})
+				s.Require().NoError(err)
+			},
+			req:    &types.QueryParamsRequest{},
+			expErr: false,
+			expParams: types.Params{
+				MaxAddValue: 500,
+				AddCost:     sdk.NewCoins(sdk.NewInt64Coin("stake", 100)),
+			},
+		},
+	}
 
-	queryServer := s.keeper
-	_ = queryServer
+	for _, tc := range testCases {
+		s.Run(tc.name, func() {
+			s.SetupTest()
+			tc.setup()
 
-	resp, err := s.queryClient.Count(s.ctx, &types.QueryCountRequest{})
-	s.Require().NoError(err)
-	s.Require().Equal(uint64(123), resp.Count)
+			resp, err := s.queryClient.Params(s.ctx, tc.req)
+			if tc.expErr {
+				s.Require().Error(err)
+			} else {
+				s.Require().NoError(err)
+				s.Require().NotNil(resp)
+				s.Require().NotNil(resp.Params)
+				s.Require().Equal(tc.expParams.MaxAddValue, resp.Params.MaxAddValue)
+				s.Require().Equal(tc.expParams.AddCost.String(), resp.Params.AddCost.String())
+			}
+		})
+	}
 }
