@@ -74,10 +74,12 @@ type AppModule struct {
 }
 
 func (a AppModule) BeginBlock(ctx context.Context) error {
+	// optional: implement some logic to execute at the beginning of every block
 	return nil
 }
 
 func (a AppModule) EndBlock(ctx context.Context) error {
+	// optional: implement some logic to execute at the end of every block
 	return nil
 }
 
