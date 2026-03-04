@@ -306,7 +306,7 @@ func (a AppModule) EndBlock(ctx context.Context) error {
 }
 ```
 
-These are stubs — the counter module doesn't need per-block logic. They exist to demonstrate the pattern. Modules that do need per-block execution (staking, distribution) implement real logic here.
+`x/counter` has no per-block logic, so both methods return nil. They exist to demonstrate the pattern: modules that need per-block execution (staking, distribution) implement real logic here. For example, a counter that auto-increments every block would call `k.AddCount(ctx, 1)` from `BeginBlock` instead of exposing a message type.
 
 ---
 
