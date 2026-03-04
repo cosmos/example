@@ -57,4 +57,30 @@ cd example
 
 ---
 
+## Repository Layout
+
+After cloning, the repository looks like this:
+
+```text
+example/
+├── exampled/         # Binary entrypoint (main.go + CLI root command)
+├── app.go            # Chain application — module wiring lives here
+├── proto/            # Proto definitions for all modules
+├── x/                # Module implementations
+│   └── counter/      # The example counter module
+├── tests/            # E2E and integration tests
+├── scripts/          # Local node and proto generation scripts
+├── docs/             # This tutorial series
+└── Makefile          # Build, test, and dev commands
+```
+
+**Where to make changes:**
+
+- Adding or modifying a module → `x/<module>/` and `proto/`
+- Wiring a module into the chain → `app.go`
+- Changing the binary or CLI → `exampled/`
+- Running the chain or tests → `Makefile` targets
+
+---
+
 Next: [Quickstart →](./tutorial-01-quickstart.md)
