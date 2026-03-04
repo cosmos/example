@@ -4,6 +4,8 @@ The minimal counter you built in the previous tutorial captures the core SDK mod
 
 This walkthrough explains what was added, where it lives, and why.
 
+The wiring code — `msg_server.go`, `query_server.go`, `module.go`, `types/` — is structurally identical between the two. Almost all of the new logic lives in a single method: `keeper.AddCount`.
+
 ---
 
 ## Minimal vs production
@@ -18,7 +20,7 @@ This walkthrough explains what was added, where it lives, and why.
 | Authority | None | Governance-gated param updates |
 | Errors | Generic | Named sentinel errors |
 | Telemetry | None | OpenTelemetry counter metric |
-| CLI | Manual | AutoCLI-generated |
+| CLI | AutoCLI | AutoCLI + `EnhanceCustomCommand` |
 | Simulation | None | `simsx` weighted operations |
 | Block hooks | None | `BeginBlock` + `EndBlock` stubs |
 | Unit tests | None | Full keeper/msg/query test suite |
@@ -233,7 +235,9 @@ func init() {
 
 ## AutoCLI
 
-The minimal counter has no CLI — users would need to construct raw transactions. `x/counter` adds AutoCLI, which generates `exampled query counter` and `exampled tx counter` subcommands automatically from the proto service definitions:
+Both modules use AutoCLI. The only difference is that `x/counter` sets `EnhanceCustomCommand: true`, which merges any hand-written CLI commands with the auto-generated ones. Since neither module has hand-written commands, it is a no-op here — but it is the recommended default for production modules.
+
+The `autocli.go` in `x/counter`:
 
 ```go
 // autocli.go
