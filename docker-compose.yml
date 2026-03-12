@@ -1,0 +1,80 @@
+services:
+  node0:
+    container_name: node0
+    image: "example-node"
+    entrypoint: ["/usr/bin/wrapper.sh"]
+    command: ["start"]
+    environment:
+      - ID=0
+      - LOG=exampled.log
+    ports:
+      - "26656-26657:26656-26657"
+      - "1317:1317"
+      - "9090:9090"
+    volumes:
+      - ./build/localnet:/data:Z
+    networks:
+      localnet:
+        ipv4_address: 192.168.10.2
+
+  node1:
+    container_name: node1
+    image: "example-node"
+    entrypoint: ["/usr/bin/wrapper.sh"]
+    command: ["start"]
+    environment:
+      - ID=1
+      - LOG=exampled.log
+    ports:
+      - "26666-26667:26656-26657"
+      - "1318:1317"
+      - "9091:9090"
+    volumes:
+      - ./build/localnet:/data:Z
+    networks:
+      localnet:
+        ipv4_address: 192.168.10.3
+
+  node2:
+    container_name: node2
+    image: "example-node"
+    entrypoint: ["/usr/bin/wrapper.sh"]
+    command: ["start"]
+    environment:
+      - ID=2
+      - LOG=exampled.log
+    ports:
+      - "26676-26677:26656-26657"
+      - "1319:1317"
+      - "9092:9090"
+    volumes:
+      - ./build/localnet:/data:Z
+    networks:
+      localnet:
+        ipv4_address: 192.168.10.4
+
+  node3:
+    container_name: node3
+    image: "example-node"
+    entrypoint: ["/usr/bin/wrapper.sh"]
+    command: ["start"]
+    environment:
+      - ID=3
+      - LOG=exampled.log
+    ports:
+      - "26686-26687:26656-26657"
+      - "1320:1317"
+      - "9093:9090"
+    volumes:
+      - ./build/localnet:/data:Z
+    networks:
+      localnet:
+        ipv4_address: 192.168.10.5
+
+networks:
+  localnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.10.0/25

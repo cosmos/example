@@ -1,0 +1,12 @@
+syntax = "proto3";
+package example.counter;
+
+import "example/counter/v1/state.proto";
+import "gogoproto/gogo.proto";
+
+option go_package = "github.com/cosmos/example/x/counter/types";
+
+message GenesisState {
+  uint64 count = 1;
+  Params params = 2 [(gogoproto.nullable) = false];
+}
