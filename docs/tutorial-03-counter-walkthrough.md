@@ -352,45 +352,26 @@ s.bankKeeper.SendCoinsFromAccountToModuleFn = func(...) error {
 
 ---
 
-## Wiring into app.go
+## Additional app.go Wiring
 
-Wiring connects the module to the running application. Every module requires the same set of changes to `app.go`.
+Tutorial 02 already had you add the basic app wiring for the minimal module: imports, the keeper field, the store key, keeper construction, module registration, and genesis/export ordering. The production module adds a few more `app.go` changes on top of that.
 
-### 1. Imports
+### Module account permissions
 
-```go
-counter      "github.com/cosmos/example/x/counter"
-counterkeeper "github.com/cosmos/example/x/counter/keeper"
-countertypes "github.com/cosmos/example/x/counter/types"
-```
-
-### 2. Module account permissions
+Because the production module can collect `AddCost` fees, it needs a module account entry in `maccPerms`:
 
 ```go
 maccPerms = map[string][]string{
-    countertypes.ModuleName: nil,  // can receive funds
+    // ...
+    countertypes.ModuleName: nil,
 }
 ```
 
-### 3. Keeper field on the app struct
+This lives in the top-level `maccPerms` map in `app.go`. `nil` means the account can receive funds but does not get mint or burn permissions.
 
-```go
-type ExampleApp struct {
-    // ...
-    CounterKeeper *counterkeeper.Keeper
-}
-```
+### Keeper construction with BankKeeper
 
-### 4. Store key
-
-```go
-keys := sdk.NewKVStoreKeys(
-    // ...
-    countertypes.StoreKey,
-)
-```
-
-### 5. Keeper instantiation
+The production keeper takes one extra dependency: `app.BankKeeper`. This is added where `app.CounterKeeper` is constructed:
 
 ```go
 app.CounterKeeper = counterkeeper.NewKeeper(
@@ -400,47 +381,29 @@ app.CounterKeeper = counterkeeper.NewKeeper(
 )
 ```
 
-Note that `app.BankKeeper` satisfies the `types.BankKeeper` interface defined in `expected_keepers.go` — the counter module never imports the bank module directly.
+`app.BankKeeper` satisfies the `types.BankKeeper` interface defined in `expected_keepers.go`, so the counter module can charge fees without importing the full bank keeper type directly.
 
-### 6. Module manager
+### Begin and end block ordering
 
-```go
-app.ModuleManager = module.NewManager(
-    // ...
-    counter.NewAppModule(appCodec, app.CounterKeeper),
-)
-```
-
-### 7. Block ordering and genesis order
+The production `AppModule` implements `BeginBlock` and `EndBlock` in `x/counter/module.go`, even though both methods currently return `nil`. Because the module advertises those hooks, `app.go` also adds `countertypes.ModuleName` to `SetOrderBeginBlockers` and `SetOrderEndBlockers`:
 
 ```go
 app.ModuleManager.SetOrderBeginBlockers(
     // ...
     countertypes.ModuleName,
 )
+
 app.ModuleManager.SetOrderEndBlockers(
     // ...
     countertypes.ModuleName,
 )
-// genesis and export orders follow the same pattern
 ```
 
-The order matters for modules with inter-dependencies. `x/counter` has no ordering constraints beyond the framework requirements, so it can appear in any position relative to unrelated modules.
-
-### Wiring checklist
-
-When adding any new module to a chain:
-
-- [ ] Add imports
-- [ ] Register module account in `maccPerms` (if module receives funds)
-- [ ] Add keeper field to app struct
-- [ ] Add store key to `NewKVStoreKeys`
-- [ ] Instantiate keeper
-- [ ] Add to module manager
-- [ ] Add to `SetOrderBeginBlockers` (if implementing `HasBeginBlocker`)
-- [ ] Add to `SetOrderEndBlockers` (if implementing `HasEndBlocker`)
-- [ ] Add to genesis and export order
+That tells the module manager where the counter module belongs in the per-block execution order. The production branch keeps the same `genesisModuleOrder` and `exportModuleOrder` wiring from Tutorial 02 as well.
 
 ---
 
 Next: [Running and Testing →](./tutorial-04-run-and-test.md)
+
+
+<!-- todo: We need to talk about configuring gas and other configurations. We also need to break up these parts into what the code is and how you wire it into AppDecode to enable it in your chain.  -->
