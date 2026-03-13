@@ -74,12 +74,12 @@ example/
 └── Makefile          # Build, test, and dev commands
 ```
 
-**Where to make changes:**
+The tutorials in this section will walk you through the most common kinds of chain changes and show you where they usually live in the repo:
 
-- Adding or modifying a module → `x/<module>/` and `proto/`
-- Wiring a module into the chain → `app.go`
-- Changing the binary or CLI → `exampled/`
-- Running the chain or tests → `Makefile` targets
+- Add or modify a module: `x/<module>/` and `proto/`
+- Wire a module into the chain: `app.go`
+- Change the binary or CLI: `exampled/`
+- Run the chain or tests: `Makefile` targets
 
 ---
 
