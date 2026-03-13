@@ -1,16 +1,20 @@
-# Production Counter Walkthrough
+# Full Counter Module Walkthrough
 
-The minimal counter you built in the previous tutorial captures the core SDK module pattern. The `x/counter` module in this repository follows the same pattern — it just adds several production features on top.
+If you came here from the module building tutorial, switch back to the `main` branch first:
 
-This walkthrough explains what was added, where it lives, and why.
+```bash
+git checkout main
+```
 
-The wiring code — `msg_server.go`, `query_server.go`, `module.go`, `types/` — is structurally identical between the two. Almost all of the new logic lives in a single method: `keeper.AddCount`.
+The minimal counter you built in the previous tutorial captures the core SDK module pattern. The full `x/counter` module example in `main` follows the same pattern and adds several features on top.
 
----
+This walkthrough is meant to show you exactly what each feature is, what it does, and how you can add a similar feature to any module.
 
-## Minimal vs production
+## Minimal vs full counter
 
-| Feature | Minimal | x/counter |
+The full counter in the `main` branch adds quite a bit of functionality to the minimal tutorial counter.
+
+| Feature | minimal x/counter | full x/counter |
 |---|---|---|
 | State | `count` | `count` + `params` |
 | Messages | `Add` | `Add` + `UpdateParams` |
@@ -25,44 +29,79 @@ The wiring code — `msg_server.go`, `query_server.go`, `module.go`, `types/` �
 | Block hooks | None | `BeginBlock` + `EndBlock` stubs |
 | Unit tests | None | Full keeper/msg/query test suite |
 
----
+The wiring code in [`msg_server.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/msg_server.go), [`query_server.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/query_server.go), [`module.go`](https://github.com/cosmos/example/blob/main/x/counter/module.go), and [`types/`](https://github.com/cosmos/example/tree/main/x/counter/types) is structurally similar between the two. Much of the new keeper logic lives in a single method: `AddCount` in [`keeper.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper.go).
 
 ## Params and authority
 
-The most significant addition is a `Params` type that lets the chain governance configure the module's behavior at runtime.
+A module param is on-chain configuration that controls how the module behaves without changing the code.
+
+The full counter adds a `Params` type that lets the chain governance configure the module's behavior at runtime. In the full module, params control how large an `Add` can be and how much it costs.
+
+### Where the code lives
+
+- [`proto/example/counter/v1/state.proto`](https://github.com/cosmos/example/blob/main/proto/example/counter/v1/state.proto) defines the `Params` type
+- [`proto/example/counter/v1/tx.proto`](https://github.com/cosmos/example/blob/main/proto/example/counter/v1/tx.proto) adds the `UpdateParams` message
+- [`proto/example/counter/v1/query.proto`](https://github.com/cosmos/example/blob/main/proto/example/counter/v1/query.proto) adds the `Params` query
+- [`x/counter/keeper/keeper.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper.go) stores the params and authority
+- [`x/counter/keeper/msg_server.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/msg_server.go) checks the authority on updates
+- [`x/counter/keeper/query_server.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/query_server.go) returns the current params
+
+### Try it
+
+You can inspect the current params with:
+
+```bash
+exampled query counter params
+```
+
+### Add this to your module
+
+To add runtime-configurable params to your own module, make these changes:
+
+1. Define a `Params` type in proto
+2. Add a privileged `UpdateParams` message
+3. Add a query to read the current params
+4. Store the params and authority in your keeper
+5. Check the authority in `MsgServer` before writing new params
 
 ### state.proto
 
-A new proto file defines the `Params` type:
+The relevant addition in [`state.proto`](https://github.com/cosmos/example/blob/main/proto/example/counter/v1/state.proto) is:
 
 ```proto
-// proto/example/counter/v1/state.proto
 message Params {
   uint64 max_add_value = 1;
-  repeated cosmos.base.v1beta1.Coin add_cost = 2;
+  repeated cosmos.base.v1beta1.Coin add_cost = 2 [
+    (gogoproto.nullable) = false,
+    (gogoproto.castrepeated) = "github.com/cosmos/cosmos-sdk/types.Coins",
+    (amino.dont_omitempty) = true
+  ];
 }
 ```
 
 `MaxAddValue` caps how much a single `Add` call can increment the counter. `AddCost` sets an optional fee charged for each add operation.
 
-### tx.proto — UpdateParams
+### tx.proto - UpdateParams
 
-A second message is added to `tx.proto`:
+The relevant addition in [`tx.proto`](https://github.com/cosmos/example/blob/main/proto/example/counter/v1/tx.proto) is:
 
 ```proto
 rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 
 message MsgUpdateParams {
-  string authority = 1;
-  Params params    = 2;
+  option (cosmos.msg.v1.signer) = "authority";
+  string authority = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  Params params = 2 [(gogoproto.nullable) = false];
 }
+
+message MsgUpdateParamsResponse {}
 ```
 
-`UpdateParams` is a privileged message — only the `authority` address can call it. By default that address is the governance module account, so params can only be changed through a governance proposal.
+`UpdateParams` is a privileged message. Only the `authority` address can call it. By default that address is the governance module account, so params can only be changed through a governance proposal.
 
-### query.proto — Params
+### query.proto - Params
 
-A second query is added to expose the current params:
+[`query.proto`](https://github.com/cosmos/example/blob/main/proto/example/counter/v1/query.proto) adds a second query to expose the current params:
 
 ```proto
 rpc Params(QueryParamsRequest) returns (QueryParamsResponse);
@@ -73,9 +112,10 @@ rpc Params(QueryParamsRequest) returns (QueryParamsResponse);
 The keeper stores the authority address and checks it on every `UpdateParams` call:
 
 ```go
-// keeper.go
 type Keeper struct {
     // ...
+    // authority is the address capable of executing a MsgUpdateParams message.
+    // Typically, this should be the x/gov module account.
     authority string
 }
 ```
@@ -97,20 +137,68 @@ The authority defaults to the governance module account at keeper construction:
 authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 ```
 
-This pattern — storing authority in the keeper, checking it in `MsgServer` — is the standard Cosmos SDK approach to governance-gated configuration.
+This pattern, storing authority in the keeper and checking it in `MsgServer`, is the standard Cosmos SDK approach to governance-gated configuration.
 
----
 
-## Fee collection — BankKeeper
+## Expected keepers and fee collection
 
-`x/counter` charges a fee for each add operation when `AddCost` is set. This requires calling into the bank module.
+This section shows the standard Cosmos SDK pattern for module-to-module interaction. `x/counter` uses an expected keeper to call into the bank module and charge a fee for each add operation.
+
+### Where the code lives
+
+- [`x/counter/types/expected_keepers.go`](https://github.com/cosmos/example/blob/main/x/counter/types/expected_keepers.go) defines the narrow bank keeper interface
+- [`x/counter/keeper/keeper.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper.go) stores the bank keeper dependency and charges the fee in `AddCount`
+- [`app.go`](https://github.com/cosmos/example/blob/main/app.go) passes `app.BankKeeper` into `counterkeeper.NewKeeper`
+- [`app.go`](https://github.com/cosmos/example/blob/main/app.go) adds a module account entry so the counter module can receive fees
+
+### app.go changes
+
+This feature requires two `app.go` changes:
+
+- add `countertypes.ModuleName: nil` to `maccPerms`
+- pass `app.BankKeeper` into `counterkeeper.NewKeeper(...)`
+
+In [`app.go`](https://github.com/cosmos/example/blob/main/app.go), those changes look like this:
+
+```go
+maccPerms = map[string][]string{
+    // ...
+    countertypes.ModuleName: nil,
+}
+```
+
+```go
+app.CounterKeeper = counterkeeper.NewKeeper(
+    runtime.NewKVStoreService(keys[countertypes.StoreKey]),
+    appCodec,
+    app.BankKeeper,
+)
+```
+
+### Try it
+
+Submit an add transaction and the configured `AddCost` fee will be charged from the sender:
+
+```bash
+exampled tx counter add 5 --from alice --chain-id demo --yes
+```
+
+### Add this to your module
+
+To add fee collection through the bank module, make these changes:
+
+1. Define a narrow bank keeper interface in `types/expected_keepers.go`
+2. Add a `bankKeeper` field to your keeper
+3. Charge the fee inside your keeper business logic
+4. Add a module account entry in `maccPerms`
+5. Pass `app.BankKeeper` into your keeper constructor in `app.go`
 
 ### expected_keepers.go
 
 Rather than importing the bank module directly, the counter module defines the minimal interface it needs:
 
 ```go
-// types/expected_keepers.go
+// x/counter/types/expected_keepers.go
 type BankKeeper interface {
     SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
 }
@@ -125,7 +213,7 @@ type Keeper struct {
     Schema     collections.Schema
     counter    collections.Item[uint64]
     params     collections.Item[types.Params]
-    bankKeeper types.BankKeeper  // injected at construction
+    bankKeeper types.BankKeeper
     authority  string
 }
 ```
@@ -134,42 +222,54 @@ type Keeper struct {
 
 ```go
 func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (uint64, error) {
-    // overflow check
     if amount >= math.MaxUint64 {
         return 0, ErrNumTooLarge
     }
 
     params, err := k.GetParams(ctx)
+    if err != nil {
+        return 0, err
+    }
 
-    // enforce MaxAddValue
     if params.MaxAddValue > 0 && amount > params.MaxAddValue {
         return 0, ErrExceedsMaxAdd
     }
 
-    // charge fee if configured
     if !params.AddCost.IsZero() {
-        senderAddr, _ := sdk.AccAddressFromBech32(sender)
+        senderAddr, err := sdk.AccAddressFromBech32(sender)
+        if err != nil {
+            return 0, err
+        }
         if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, params.AddCost); err != nil {
             return 0, sdkerrors.Wrap(ErrInsufficientFunds, err.Error())
         }
     }
 
-    // update state
-    count, _ := k.GetCount(ctx)
-    newCount := count + amount
-    k.counter.Set(ctx, newCount)
+    count, err := k.GetCount(ctx)
+    if err != nil {
+        return 0, err
+    }
 
-    // emit event
-    sdkCtx.EventManager().EmitEvent(sdk.NewEvent("count_increased",
-        sdk.NewAttribute("count", fmt.Sprintf("%v", newCount)),
-    ))
+    newCount := count + amount
+    if err := k.counter.Set(ctx, newCount); err != nil {
+        return 0, err
+    }
+
+    sdkCtx := sdk.UnwrapSDKContext(ctx)
+    sdkCtx.EventManager().EmitEvent(
+        sdk.NewEvent(
+            "count_increased",
+            sdk.NewAttribute("count", fmt.Sprintf("%v", newCount)),
+        ),
+    )
 
     countMetric.Add(ctx, int64(amount))
+
     return newCount, nil
 }
 ```
 
-All the business logic — validation, fee charging, state mutation, events, and telemetry — lives in `AddCount`. The `MsgServer` stays thin:
+All the business logic, validation, fee charging, state mutation, events, and telemetry, lives in `AddCount`. The `MsgServer` stays thin:
 
 ```go
 func (m msgServer) Add(ctx context.Context, req *types.MsgAddRequest) (*types.MsgAddResponse, error) {
@@ -181,11 +281,13 @@ func (m msgServer) Add(ctx context.Context, req *types.MsgAddRequest) (*types.Ms
 }
 ```
 
-Because `AddCount` is a named keeper method, it can also be called from `BeginBlock`, governance hooks, or other modules — not just from the `MsgServer`.
+Because `AddCount` is a named keeper method, it can also be called from `BeginBlock`, governance hooks, or other modules, not just from the `MsgServer`.
 
-### Module account
+### Module accounts
 
-Because the counter module receives fees from users, it needs a module account in the bank module's permission map. This is registered in `app.go`:
+A module account is an on-chain account owned by a module instead of a user. Modules use module accounts to hold funds, receive fees, or get special permissions like minting or burning.
+
+Because `x/counter` receives fees from users, it needs a module account entry in [`app.go`](https://github.com/cosmos/example/blob/main/app.go):
 
 ```go
 maccPerms = map[string][]string{
@@ -194,13 +296,16 @@ maccPerms = map[string][]string{
 }
 ```
 
-`nil` means the module account can receive funds but not mint or burn them.
-
----
+This lives in the `maccPerms` map in [`app.go`](https://github.com/cosmos/example/blob/main/app.go). Here, `nil` means the module account can receive funds but does not get extra permissions like minting or burning.
 
 ## Sentinel errors
 
-Rather than returning generic errors, `x/counter` defines named errors with registered codes:
+Rather than returning generic errors, `x/counter` defines named errors with registered codes. That makes failures easier to understand and easier for clients to match on programmatically.
+
+### Where the code lives
+
+- [`x/counter/keeper/errors.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/errors.go) defines the registered module errors
+- [`x/counter/keeper/keeper.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper.go) returns those errors from business logic checks
 
 ```go
 // keeper/errors.go
@@ -213,44 +318,70 @@ var (
 
 Registered errors produce structured error responses on-chain that clients can match against by code, not just by string.
 
----
-
 ## Telemetry
 
+Telemetry records how often the counter is updated so you can observe module activity in an OpenTelemetry-compatible system.
+
+### Where the code lives
+
+- [`x/counter/keeper/telemetry.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/telemetry.go) defines the meter and counter metric
+- [`x/counter/keeper/keeper.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper.go) records the metric from `AddCount`
+
 ```go
-// keeper/telemetry.go
+// x/counter/keeper/telemetry.go
 var (
-    meter       = otel.Meter("github.com/cosmos/example/x/counter")
+    meter = otel.Meter("github.com/cosmos/example/x/counter")
+
     countMetric metric.Int64Counter
 )
 
 func init() {
+    var err error
     countMetric, err = meter.Int64Counter("count")
+    if err != nil {
+        panic(err)
+    }
 }
 ```
 
 `countMetric.Add(ctx, int64(amount))` in `AddCount` increments an OpenTelemetry counter every time the module state is updated. This makes module activity visible in any OTel-compatible observability system.
 
----
-
 ## AutoCLI
 
-Both modules use AutoCLI. The only difference is that `x/counter` sets `EnhanceCustomCommand: true`, which merges any hand-written CLI commands with the auto-generated ones. Since neither module has hand-written commands, it is a no-op here — but it is the recommended default for production modules.
+AutoCLI exposes the module's queries and transactions as CLI commands. The full module example keeps the same basic AutoCLI setup as the minimal module and adds the recommended setting for custom command integration.
 
-The `autocli.go` in `x/counter`:
+### Where the code lives
+
+- [`x/counter/autocli.go`](https://github.com/cosmos/example/blob/main/x/counter/autocli.go) defines the generated query and tx commands
+
+### Try it
+
+These commands come from the AutoCLI configuration. `count` and `add` are customized explicitly in `autocli.go`, and `params` is still available from the generated query service.
+
+```bash
+exampled query counter count
+exampled query counter params
+exampled tx counter add 5 --from alice --chain-id demo --yes
+```
+
+Both modules use AutoCLI. The only difference is that `x/counter` sets `EnhanceCustomCommand: true`, which merges any hand-written CLI commands with the auto-generated ones. Since neither module has hand-written commands, it is a no-op here, but it is a good default for fuller modules.
+
+The [`autocli.go`](https://github.com/cosmos/example/blob/main/x/counter/autocli.go) file in `x/counter`:
 
 ```go
 // autocli.go
 func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
     return &autocliv1.ModuleOptions{
         Query: &autocliv1.ServiceCommandDescriptor{
-            Service: "example.counter.Query",
+            Service:              "example.counter.Query",
+            EnhanceCustomCommand: true,
             RpcCommandOptions: []*autocliv1.RpcCommandOptions{
                 {RpcMethod: "Count", Use: "count", Short: "Query the current counter value"},
             },
         },
         Tx: &autocliv1.ServiceCommandDescriptor{
-            Service: "example.counter.Msg",
+            Service:              "example.counter.Msg",
+            EnhanceCustomCommand: true,
             RpcCommandOptions: []*autocliv1.RpcCommandOptions{
                 {RpcMethod: "Add", Use: "add [amount]", Short: "Add to the counter",
                     PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "add"}}},
@@ -260,22 +391,40 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 }
 ```
 
----
 
 ## Simulation
+
+Simulation lets the SDK generate randomized transactions against the module during fuzz-style testing.
+
+### Where the code lives
+
+- [`x/counter/simulation/msg_factory.go`](https://github.com/cosmos/example/blob/main/x/counter/simulation/msg_factory.go) defines how to generate random `Add` messages
+- [`x/counter/module.go`](https://github.com/cosmos/example/blob/main/x/counter/module.go) registers those weighted operations
+
+### Test it
+
+You can exercise simulation through the repo's simulation test targets described in the running and testing tutorial.
 
 `x/counter` implements `simsx`-based simulation, which lets the SDK's simulation framework generate random `Add` transactions during fuzz testing:
 
 ```go
-// simulation/msg_factory.go
+// x/counter/simulation/msg_factory.go
 func MsgAddFactory() simsx.SimMsgFactoryFn[*types.MsgAddRequest] {
     return func(ctx context.Context, testData *simsx.ChainDataSource, reporter simsx.SimulationReporter) ([]simsx.SimAccount, *types.MsgAddRequest) {
         sender := testData.AnyAccount(reporter)
-        addAmount := uint64(testData.Rand().Intn(100) + 1)
-        return []simsx.SimAccount{sender}, &types.MsgAddRequest{
+        if reporter.IsSkipped() {
+            return nil, nil
+        }
+
+        r := testData.Rand()
+        addAmount := uint64(r.Intn(100) + 1)
+
+        msg := &types.MsgAddRequest{
             Sender: sender.AddressBech32,
             Add:    addAmount,
         }
+
+        return []simsx.SimAccount{sender}, msg
     }
 }
 ```
@@ -288,9 +437,26 @@ func (a AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Reg
 }
 ```
 
----
 
 ## BeginBlock and EndBlock
+
+These hooks let a module run code automatically at the start or end of every block. In `x/counter`, they are purposefully empty to demonstrate where and how these features can be added. 
+
+### Where the code lives
+
+- [`x/counter/module.go`](https://github.com/cosmos/example/blob/main/x/counter/module.go) implements `BeginBlock` and `EndBlock`
+- [`app.go`](https://github.com/cosmos/example/blob/main/app.go) adds the module to `SetOrderBeginBlockers` and `SetOrderEndBlockers`
+
+### app.go changes
+
+Because the module advertises block hooks, [`app.go`](https://github.com/cosmos/example/blob/main/app.go) must include `countertypes.ModuleName` in both blocker order lists.
+
+### Add this to your module
+
+To add begin and end blockers to your own module, make two changes:
+
+1. Implement the hooks in `x/<module>/module.go`
+2. Add your module name to `SetOrderBeginBlockers` and `SetOrderEndBlockers` in `app.go`
 
 `module.go` implements `HasBeginBlocker` and `HasEndBlocker`:
 
@@ -306,13 +472,45 @@ func (a AppModule) EndBlock(ctx context.Context) error {
 }
 ```
 
-`x/counter` has no per-block logic, so both methods return nil. They exist to demonstrate the pattern: modules that need per-block execution (staking, distribution) implement real logic here. For example, a counter that auto-increments every block would call `k.AddCount(ctx, 1)` from `BeginBlock` instead of exposing a message type.
+In [`app.go`](https://github.com/cosmos/example/blob/main/app.go), the module is added to the blocker order lists like this:
 
----
+```go
+app.ModuleManager.SetOrderBeginBlockers(
+    // ...
+    countertypes.ModuleName,
+)
+
+app.ModuleManager.SetOrderEndBlockers(
+    // ...
+    countertypes.ModuleName,
+)
+```
+
+`x/counter` has no per-block logic, so both methods return nil. They exist to demonstrate the pattern: modules that need per-block execution (staking, distribution) implement real logic here. For example, a counter that auto-increments every block would call `k.AddCount(ctx, 1)` from `BeginBlock` instead of exposing a message type.
 
 ## Unit tests
 
-`x/counter` ships a full test suite in `x/counter/keeper/`:
+The full module example includes a real test suite for keeper logic, query behavior, message handling, and bank keeper interactions.
+
+### Where the code lives
+
+- [`x/counter/keeper/keeper_test.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper_test.go)
+- [`x/counter/keeper/msg_server_test.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/msg_server_test.go)
+- [`x/counter/keeper/query_server_test.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/query_server_test.go)
+
+### Run them
+
+You can run the counter module tests directly with:
+
+```bash
+go test ./x/counter/...
+```
+
+### Add this to your module
+
+Start with keeper, message server, and query server tests. If your module depends on another keeper, use a small mock interface like `MockBankKeeper` so you can control success and failure cases in isolation.
+
+`x/counter` ships a full test suite in [`x/counter/keeper/`](https://github.com/cosmos/example/tree/main/x/counter/keeper):
 
 | File | What it tests |
 |---|---|
@@ -320,7 +518,7 @@ func (a AppModule) EndBlock(ctx context.Context) error {
 | `msg_server_test.go` | `MsgAdd`, event emission, `MsgUpdateParams` |
 | `query_server_test.go` | `QueryCount`, `QueryParams` |
 
-All three files share the `KeeperTestSuite` struct defined in `keeper_test.go`, which sets up an isolated in-memory store, a mock bank keeper, and a real keeper instance:
+All three files share the `KeeperTestSuite` struct defined in [`keeper_test.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper_test.go), which sets up an isolated in-memory store, a mock bank keeper, and a real keeper instance:
 
 ```go
 type KeeperTestSuite struct {
@@ -349,59 +547,6 @@ s.bankKeeper.SendCoinsFromAccountToModuleFn = func(...) error {
     return errors.New("insufficient funds")
 }
 ```
-
----
-
-## Additional app.go Wiring
-
-Tutorial 02 already had you add the basic app wiring for the minimal module: imports, the keeper field, the store key, keeper construction, module registration, and genesis/export ordering. The production module adds a few more `app.go` changes on top of that.
-
-### Module account permissions
-
-Because the production module can collect `AddCost` fees, it needs a module account entry in `maccPerms`:
-
-```go
-maccPerms = map[string][]string{
-    // ...
-    countertypes.ModuleName: nil,
-}
-```
-
-This lives in the top-level `maccPerms` map in `app.go`. `nil` means the account can receive funds but does not get mint or burn permissions.
-
-### Keeper construction with BankKeeper
-
-The production keeper takes one extra dependency: `app.BankKeeper`. This is added where `app.CounterKeeper` is constructed:
-
-```go
-app.CounterKeeper = counterkeeper.NewKeeper(
-    runtime.NewKVStoreService(keys[countertypes.StoreKey]),
-    appCodec,
-    app.BankKeeper,
-)
-```
-
-`app.BankKeeper` satisfies the `types.BankKeeper` interface defined in `expected_keepers.go`, so the counter module can charge fees without importing the full bank keeper type directly.
-
-### Begin and end block ordering
-
-The production `AppModule` implements `BeginBlock` and `EndBlock` in `x/counter/module.go`, even though both methods currently return `nil`. Because the module advertises those hooks, `app.go` also adds `countertypes.ModuleName` to `SetOrderBeginBlockers` and `SetOrderEndBlockers`:
-
-```go
-app.ModuleManager.SetOrderBeginBlockers(
-    // ...
-    countertypes.ModuleName,
-)
-
-app.ModuleManager.SetOrderEndBlockers(
-    // ...
-    countertypes.ModuleName,
-)
-```
-
-That tells the module manager where the counter module belongs in the per-block execution order. The production branch keeps the same `genesisModuleOrder` and `exportModuleOrder` wiring from Tutorial 02 as well.
-
----
 
 Next: [Running and Testing →](./tutorial-04-run-and-test.md)
 
