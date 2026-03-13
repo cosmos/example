@@ -9,6 +9,7 @@ import "gogoproto/gogo.proto";
 option go_package = "github.com/cosmos/example/x/counter/types";
 
 service Msg {
+  option (cosmos.msg.v1.service) = true;
   rpc Add(MsgAddRequest) returns (MsgAddResponse);
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 }
