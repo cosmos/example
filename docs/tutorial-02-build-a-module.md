@@ -1,58 +1,41 @@
 # Build a Module from Scratch
 
-This tutorial walks through building a minimal counter module from scratch so you can learn the core Cosmos SDK module pattern as quickly as possible. It uses the same overall structure as `x/counter`, the fuller example module in this repository.
+In [quickstart](./tutorial-01-quickstart.md), you started a chain and submitted a transaction to increase the counter. In this tutorial, you'll build a simple counter module from scratch. It follows the same overall structure as the full `x/counter`, but uses a stripped-down version so you can focus on the core steps of building and wiring a module yourself.
 
+By the end, you'll have built a working module and wired it into a running chain.
 
-By the end, you'll have a working counter module wired into a running chain.
+> **Install prerequisites:** Before continuing, follow the [Prerequisites guide](./tutorial-00-prerequisites.md) to make sure everything is installed. This tutorial will not work without them.
 
-## Before You Begin
+## Making modules
 
-<!-- todo: implement ideass in ideas/ideas.md -->
-
-This tutorial uses the `tutorial/start` branch, which has the counter module stripped out and `app.go` wiring removed. The directory structure is in place — you fill it in.
-
-```bash
-git clone https://github.com/cosmos/example
-cd example
-git checkout tutorial/start
-mkdir -p x/counter/keeper x/counter/types proto/example/counter/v1
-```
-
-You should see empty placeholder directories at `x/counter/` and `proto/example/counter/v1/`.
-
-> **Branch model:** On the `main` branch, `x/counter` is the full production module. On `tutorial/start`, that module and its app.go wiring are removed so you can rebuild a minimal version from scratch under the same path (`x/counter`). Without this context, it may look like you are editing the production module — you are not.
-
-
-## The Module Loop
-
-Every Cosmos SDK module follows the same pattern:
+The Cosmos SDK makes it easy to build custom business logic directly into your chain through modules. Every module follows the same overall pattern:
 
 ```text
 proto files → code generation → keeper → msg server → query server → module.go → app wiring
 ```
 
-- **Proto files** define the module's messages, queries, and state types
-- **Code generation** (`make proto-gen`) produces Go interfaces and types from those definitions
-- **Keeper** owns and manages the module's state
-- **MsgServer** handles incoming transactions and delegates to the keeper
-- **QueryServer** handles read-only queries against the keeper
-- **module.go** wires everything together and registers it with the application
+First, you'll define what the module does:
 
-Here is how each proto definition maps to generated code and then to your implementation:
+- Define messages: users can send `Add` to increase the counter
+- Define queries: users can query `Count` to read the current value
+- Define genesis state: the module starts with a count of `0`
 
-| Proto | Generated (types/) | Your implementation |
-| --- | --- | --- |
-| `service Msg { rpc Add }` | `MsgServer` interface | `keeper/msg_server.go` |
-| `service Query { rpc Count }` | `QueryServer` interface | `keeper/query_server.go` |
-| `message MsgAddRequest` | `MsgAddRequest` struct | used as input in `msg_server.go` |
-| `message GenesisState` | `GenesisState` struct | used in `InitGenesis` / `ExportGenesis` |
+Then you'll wire that behavior into the SDK:
 
-Steps 3–8 implement the right-hand column. Steps 1–2 produce the middle column.
+- Run `proto-gen` to generate the Go types and interfaces
+- Implement your business logic in a `keeper` to store the count and update it
+- Implement `MsgServer` and `QueryServer` to pass messages and queries into the keeper
+- Register the module in `module.go`
+- Wire it into the chain in `app.go`
 
-
-## Directory Structure
+You'll build the following module structure:
 
 ```text
+proto/example/counter/v1/
+├── tx.proto            # Transaction message and Msg service definition
+├── query.proto         # Query message and Query service definition
+└── genesis.proto       # Genesis state definition
+
 x/counter/
 ├── keeper/
 │   ├── keeper.go         # Keeper struct and state methods
@@ -64,16 +47,33 @@ x/counter/
 │   └── *.pb.go           # Generated from proto — do not edit
 ├── module.go             # AppModule wiring
 └── autocli.go            # CLI command definitions
-
-proto/example/counter/v1/
-├── tx.proto
-├── query.proto
-└── genesis.proto
 ```
 
-## Step 1: Proto files
+## Step 1: Setup
 
-Proto files are the source of truth for the module's public API. You define messages and services here. In this tutorial, the counter module stores one number, `Add` increases it by the amount the user submits, and the query returns the current value. After, `make proto-gen` produces the Go interfaces you then implement.
+This tutorial uses the `tutorial/start` branch, which is a blank template for you to create the module from scratch and wire it into `app.go`.
+
+1. Clone the repo if you haven't already:
+
+```bash
+git clone https://github.com/cosmos/example
+cd example
+```
+
+2. Check out the `tutorial/start` branch and make the new module directories:
+
+```bash
+git checkout tutorial/start
+mkdir -p x/counter/keeper x/counter/types proto/example/counter/v1
+```
+
+You should see empty placeholder directories at `x/counter/` and `proto/example/counter/v1/`.
+
+## Step 2: Proto files
+
+Proto files are the source of truth for the module's public API. You define messages and services here. 
+
+In this tutorial, the counter module stores one number, `Add` increases it by the amount the user submits, and the query returns the current value. 
 
 First, create the three proto files:
 
@@ -87,7 +87,7 @@ Then add the following contents to each file.
 
 ### tx.proto
 
-This is the first module file you define. It declares the transaction message shape for `Add`: what the user sends to increment the counter, and what the module returns after handling it.
+This is the first module file you define. It declares the transaction message shape for `Add`: what the user sends to increment the counter, and what the module returns after handling it. Add the following code to `tx.proto`.
 
 ```proto
 syntax = "proto3";
@@ -123,7 +123,7 @@ message MsgAddResponse {
 
 ### query.proto
 
-This file defines the read-only gRPC query service and the response type for fetching the current count.
+This file defines the read-only gRPC query service and the response type for fetching the current count. Add the following code to `query.proto`.
 
 ```proto
 syntax = "proto3";
@@ -155,7 +155,7 @@ message QueryCountResponse {
 
 ### genesis.proto
 
-This file defines the data the module stores in genesis so the counter can be initialized when the chain starts.
+This file defines the data the module stores in genesis so the counter can be initialized when the chain starts. Add the following code to `genesis.proto`.
 
 ```proto
 syntax = "proto3";
@@ -172,16 +172,20 @@ message GenesisState {
 }
 ```
 
-## Step 2: Generate Code
+## Step 3: Generate Code
 
-Make sure Docker is running. The first time you run proto-gen you need to build the builder image:
+1. Make sure Docker is running. 
+
+2. The first time you run proto-gen you need to build the builder image. Run the following commands:
 
 ```bash
 make proto-image-build
 make proto-gen
 ```
 
-This compiles the proto files using [buf](https://buf.build) inside Docker. The generated files will appear in `x/counter/types/`:
+This compiles the proto files using [buf](https://buf.build) inside Docker to produce the Go interfaces you will then implement.
+
+The generated files will appear in `x/counter/types/`:
 
 ```text
 x/counter/types/
@@ -196,11 +200,11 @@ x/counter/types/
 The most important generated output is the `MsgServer` and `QueryServer` interfaces. In Steps 5 and 6, you'll implement them in `keeper/msg_server.go` and `keeper/query_server.go`.
 
 
-## Step 3: Types
+## Step 4: Types
 
-In this step, you define the small supporting files in `x/counter/types` that the rest of the module depends on before you write any keeper logic. They live here because they describe shared module types and identifiers, not state-management code.
+Next, you'll define the module types and identifiers in `x/counter/types` that the rest of the module depends on.
 
-First, create the two files for this section:
+Create the two files for this section:
 
 ```bash
 touch x/counter/types/keys.go \
@@ -254,7 +258,7 @@ func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 `_Msg_serviceDesc` is generated by `make proto-gen` — it describes the `Msg` gRPC service defined in `tx.proto`.
 
 
-## Step 4: Keeper
+## Step 5: Keeper
 
 In this step, you create the keeper, which is the part of the module that owns the counter state and provides the methods the rest of the module will call.
 
@@ -342,7 +346,7 @@ func (k *Keeper) ExportGenesis(ctx context.Context) (*types.GenesisState, error)
 > - `ErrNotFound` treated as zero means the keeper never needs to explicitly set an initial value — the first `GetCount` call on a fresh chain returns `0` by convention.
 
 
-## Step 5: MsgServer
+## Step 6: MsgServer
 
 In this step, you implement the transaction handler for the generated `MsgServer` interface. This is the code path that runs when a user submits `tx counter add`.
 
@@ -388,7 +392,7 @@ func (m msgServer) Add(ctx context.Context, req *types.MsgAddRequest) (*types.Ms
 `msgServer` embeds `*Keeper` and delegates directly to `AddCount`. The handler itself contains no business logic.
 
 
-## Step 6: QueryServer
+## Step 7: QueryServer
 
 In this step, you implement the read-only query handler for the generated `QueryServer` interface. This is the code path that runs when someone queries the current counter value.
 
@@ -431,7 +435,7 @@ func (q queryServer) Count(ctx context.Context, _ *types.QueryCountRequest) (*ty
 ```
 
 
-## Step 7: module.go
+## Step 8: module.go
 
 In this step, you connect your keeper and generated services to the Cosmos SDK module framework so the application knows how to initialize the module, expose its query routes, and register its transaction handlers.
 
@@ -546,7 +550,7 @@ The `var _ interface = Struct{}` block at the top is a Go compile-time check —
 `RegisterServices` is the most important method. It connects the generated server interfaces to your implementations, making them reachable from the SDK's message and query routers.
 
 
-## Step 8: AutoCLI
+## Step 9: AutoCLI
 
 In this step, you define the CLI metadata for your module. AutoCLI reads this configuration together with your proto services and generates the `exampled query counter` and `exampled tx counter` commands automatically.
 
@@ -558,7 +562,7 @@ touch x/counter/autocli.go
 
 Then add the following contents.
 
-This file tells AutoCLI how to expose the `Count` query and `Add` transaction as simple command-line commands.
+This file tells `AutoCLI` how to expose the `Count` query and `Add` transaction as simple command-line commands.
 
 ```go
 // x/counter/autocli.go
@@ -580,7 +584,7 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
         Tx: &autocliv1.ServiceCommandDescriptor{
             Service: "example.counter.Msg",
             RpcCommandOptions: []*autocliv1.RpcCommandOptions{
-                // exampled tx counter add 5 --from alice
+                // exampled tx counter add 4 --from alice
                 {RpcMethod: "Add", Use: "add [amount]", Short: "Add to the counter",
                     PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "add"}}},
             },
@@ -589,81 +593,85 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 }
 ```
 
-`PositionalArgs` maps the first CLI argument to the `add` field in `MsgAddRequest`, so `add 5` works instead of `add --add 5`.
+`PositionalArgs` maps the first CLI argument to the `add` field in `MsgAddRequest`, so `add 4` works instead of `add --add 4`.
 
 
-## Step 9: Wire into app.go
+## Step 10: Wire into app.go
 
 In this step, you wire your new module into the application so the chain creates its store, constructs its keeper, and includes it in module startup and genesis handling.
 
-Open `app.go`. For each change below, find the matching block and add the highlighted lines.
+Open `app.go`. Each code block below starts with the exact marker comment to look for in the file. Paste your code directly below each marker.
 
-### Imports
+### 1. Imports
 
-Find the import block near the bottom of the Cosmos SDK imports and add these three lines:
+Add the counter module, keeper, and shared types imports to `app.go`.
 
 ```go
-// tutorial-02: add counter imports here
-// After: "github.com/cosmos/cosmos-sdk/x/tx/signing"
+// counter tutorial app wiring 1: add counter imports here
 	counter       "github.com/cosmos/example/x/counter"
 	counterkeeper "github.com/cosmos/example/x/counter/keeper"
 	countertypes  "github.com/cosmos/example/x/counter/types"
 ```
 
-### Keeper Field
+### 2. Keeper Field
 
-Find the keeper fields on `type ExampleApp struct` and add `CounterKeeper`:
+Store the counter keeper on `ExampleApp` so the rest of the app can reference it.
 
 ```go
-// tutorial-02: add counter keeper field here
-// After: ConsensusParamsKeeper consensusparamkeeper.Keeper
+// counter tutorial app wiring 2: add the counter keeper field here
 CounterKeeper         *counterkeeper.Keeper
 ```
 
-### Store Key
+### 3. Store Key
 
-Find `keys := storetypes.NewKVStoreKeys(` and add the counter store key:
+Give the counter module its own KV store namespace.
 
 ```go
-// tutorial-02: add counter store key here
-// After: consensusparamtypes.StoreKey,
+// counter tutorial app wiring 3: add the counter store key here
 countertypes.StoreKey,
 ```
 
-### Keeper Instantiation
+### 4. Keeper Instantiation
 
-Find the code just after `app.GovKeeper = ...` and add the counter keeper construction:
+Construct the counter keeper using the module store and app codec.
 
 ```go
-// tutorial-02: create the counter keeper here
-// After: app.GovKeeper = *govKeeper.SetHooks(...)
+// counter tutorial app wiring 4: create the counter keeper here
 app.CounterKeeper = counterkeeper.NewKeeper(
 	runtime.NewKVStoreService(keys[countertypes.StoreKey]),
 	appCodec,
 )
 ```
 
-### Module Manager
+### 5. Module Manager
 
-Find `app.ModuleManager = module.NewManager(` and add the counter module to the list:
+Register the counter module with the app's module manager.
 
 ```go
-// tutorial-02: register the counter module here
-// After: vesting.NewAppModule(app.AccountKeeper, app.BankKeeper),
+// counter tutorial app wiring 5: register the counter module here
 counter.NewAppModule(appCodec, app.CounterKeeper),
 ```
 
-### Genesis and Export Order
+### 6. Genesis Order
 
-For the minimal module, the important ordering is genesis import and export. Add `countertypes.ModuleName` to both `genesisModuleOrder` and `exportModuleOrder`. This module has no special ordering requirements, so placing it near the end of each list is fine. The production module adds module-account wiring and begin/end block hooks later in Tutorial 03.
+Include the counter module when the app initializes state from genesis.
 
 ```go
-// tutorial-02: add this in genesisModuleOrder and exportModuleOrder
+// counter tutorial app wiring 6: add the counter module to genesis order here
+countertypes.ModuleName,
+```
+
+### 7. Export Order
+
+Include the counter module when the app exports state back out to genesis.
+
+```go
+// counter tutorial app wiring 7: add the counter module to export order here
 countertypes.ModuleName,
 ```
 
 
-## Step 10: Build
+## Step 11: Build
 
 Run the following to compile the app and make sure the new module wiring is valid before you try to run the chain.
 
@@ -674,7 +682,7 @@ go build ./...
 Fix any compilation errors before continuing.
 
 
-## Step 11: Smoke Test
+## Step 12: Test your module
 
 Now you'll run the app locally and use one transaction plus one query to confirm the module works end-to-end.
 
@@ -688,10 +696,9 @@ make start
 ```
 
 This builds and installs `exampled` and then runs [`scripts/local_node.sh`](../../scripts/local_node.sh), which:
-- resets the local home directory
+- resets the local chain data
 - initializes genesis
-- creates the `alice` and `bob` test accounts
-- funds those accounts
+- creates and funds the `alice` and `bob` test accounts
 - creates a validator transaction
 - starts the chain
 
@@ -713,7 +720,7 @@ code: 0
 
 ### Query the chain
 
-Query the counter to confirm the stored value changed. This uses the `exampled query counter count` command that AutoCLI generated from the `Query` service you defined earlier:
+Query the counter to confirm the stored value changed using the query command that `AutoCLI` generated earlier:
 
 ```bash
 exampled query counter count
@@ -725,24 +732,10 @@ You should see the following output:
 count: "4"
 ```
 
-Congratulations, You've just created a Cosmos module from scratch and wired it into a real chain!
+Congratulations, you've just created a Cosmos module from scratch and wired it into a real chain!
 
+## Next steps
 
-## Summary
+The simple counter module you built here follows the same structure as the full `x/counter` example in the `main` branch. Next, you'll see how the full module extends that foundation with features like params, fee collection, tests, and more.
 
-| File | Role |
-| --- | --- |
-| `tx.proto` / `query.proto` / `genesis.proto` | Declare the module's public API |
-| `types/keys.go` | Module name and store key |
-| `types/codec.go` | Interface registration |
-| `keeper/keeper.go` | State ownership and access |
-| `keeper/msg_server.go` | Transaction handling |
-| `keeper/query_server.go` | Query handling |
-| `module.go` | Framework registration |
-| `autocli.go` | CLI command definitions |
-| `app.go` | Chain integration |
-
-The production `x/counter` on the `main` branch follows this exact same structure. In the next section you'll see what it adds on top.
-
-
-Next: [Production Counter Walkthrough →](./tutorial-03-counter-walkthrough.md)
+Next: [Full Counter Module Walkthrough →](./tutorial-03-counter-walkthrough.md)
