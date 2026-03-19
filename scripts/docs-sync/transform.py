@@ -45,7 +45,7 @@ def strip_frontmatter(content: str) -> tuple[dict, str]:
     front = content[3:end].strip()
     for line in front.splitlines():
         if ":" in line:
-            k, _, v = line.partition(":")
+            k, v = line.split(":", 1)
             fields[k.strip()] = v.strip()
     remaining = content[end + 4:].lstrip("\n")
     return fields, remaining
