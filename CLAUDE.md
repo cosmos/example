@@ -91,6 +91,15 @@ Docs in `docs/` are kept in sync with the Cosmos docs site repo (`cosmos/docs`) 
 
 ### Transform script
 
+`transform.py` exists in two places and must be kept in sync:
+
+- `cosmos/example`: `scripts/docs-sync/transform.py` — used for manual local syncs (both directions)
+- `cosmos/docs`: `scripts/docs-sync/transform.py` — used by the `docs-sync-to-example.yml` workflow
+
+**If you change the transform logic, update both copies.** The docs repo copy is intentional: the workflow must not copy and execute an unverified script from an external repo, since it has access to `EXAMPLE_REPO_TOKEN`.
+
+The `docs-sync.yml` workflow in `cosmos/example` runs `transform.py` from the example repo itself — this is safe because it only has access to `DOCS_REPO_TOKEN` (write on `cosmos/docs`), not any token that could be used to write back to `cosmos/example`.
+
 `scripts/docs-sync/transform.py` handles all conversion in both directions:
 
 ```bash

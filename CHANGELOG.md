@@ -4,6 +4,11 @@ All notable changes to this repository are tracked here for agent context.
 
 ## [Unreleased]
 
+### Docs Sync Fixes
+
+- Fixed `git diff --quiet` in both sync workflows — it missed untracked files (new tutorial pages would silently skip sync). Replaced with `git status --porcelain <dir>` which catches new, modified, and deleted files.
+- Moved `transform.py` into `cosmos/docs` repo (`scripts/docs-sync/transform.py`) so the workflow no longer copies and executes an unverified script from an external repo; changes to the script now go through PR review on the docs repo.
+
 ### Tutorial Branch Automation
 
 - Added `scripts/create-tutorial-branch.sh` to `main` (previously only on `tutorial/start`); updated to use `git checkout -B` for existing branch and cross-platform `perl -i` instead of `sed -i ''`
