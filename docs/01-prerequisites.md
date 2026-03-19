@@ -8,7 +8,7 @@ This tutorial is intended for macOS and Linux systems. Other systems may have ad
 
 ## Go
 
-The example chain requires Go 1.25 or higher.
+The example chain requires Go 1.25 or higher. 
 
 ```bash
 go version
