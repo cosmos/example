@@ -81,10 +81,6 @@ func (k *Keeper) GetCount(ctx context.Context) (uint64, error) {
 // AddCount adds the specified amount to the counter after validating against params
 // and charging any applicable fees. Returns the new count.
 func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (uint64, error) {
-	if amount >= math.MaxUint64 {
-		return 0, ErrNumTooLarge
-	}
-
 	params, err := k.GetParams(ctx)
 	if err != nil {
 		return 0, err
@@ -92,6 +88,16 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
 
 	if params.MaxAddValue > 0 && amount > params.MaxAddValue {
 		return 0, ErrExceedsMaxAdd
+	}
+
+	count, err := k.GetCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// Guard against uint64 overflow
+	if amount > math.MaxUint64-count {
+		return 0, ErrNumTooLarge
 	}
 
 	// Charge the user if add cost is set
@@ -103,11 +109,6 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
 		if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, params.AddCost); err != nil {
 			return 0, sdkerrors.Wrap(ErrInsufficientFunds, err.Error())
 		}
-	}
-
-	count, err := k.GetCount(ctx)
-	if err != nil {
-		return 0, err
 	}
 
 	newCount := count + amount

@@ -222,10 +222,6 @@ type Keeper struct {
 
 ```go
 func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (uint64, error) {
-    if amount >= math.MaxUint64 {
-        return 0, ErrNumTooLarge
-    }
-
     params, err := k.GetParams(ctx)
     if err != nil {
         return 0, err
@@ -233,6 +229,16 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
 
     if params.MaxAddValue > 0 && amount > params.MaxAddValue {
         return 0, ErrExceedsMaxAdd
+    }
+
+    count, err := k.GetCount(ctx)
+    if err != nil {
+        return 0, err
+    }
+
+    // Guard against uint64 overflow
+    if amount > math.MaxUint64-count {
+        return 0, ErrNumTooLarge
     }
 
     if !params.AddCost.IsZero() {
@@ -243,11 +249,6 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
         if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, params.AddCost); err != nil {
             return 0, sdkerrors.Wrap(ErrInsufficientFunds, err.Error())
         }
-    }
-
-    count, err := k.GetCount(ctx)
-    if err != nil {
-        return 0, err
     }
 
     newCount := count + amount
@@ -310,9 +311,9 @@ Rather than returning generic errors, `x/counter` defines [named sentinel errors
 ```go
 // keeper/errors.go
 var (
-    ErrNumTooLarge       = errors.Register("counter", 0, "requested integer to add is too large")
-    ErrExceedsMaxAdd     = errors.Register("counter", 1, "add value exceeds max allowed")
-    ErrInsufficientFunds = errors.Register("counter", 2, "insufficient funds to pay add cost")
+    ErrNumTooLarge       = errors.Register("counter", 1, "requested integer to add is too large")
+    ErrExceedsMaxAdd     = errors.Register("counter", 2, "add value exceeds max allowed")
+    ErrInsufficientFunds = errors.Register("counter", 3, "insufficient funds to pay add cost")
 )
 ```
 
