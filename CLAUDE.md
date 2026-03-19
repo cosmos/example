@@ -122,21 +122,32 @@ Both actions check `!contains(github.event.head_commit.message, '[docs-sync]')` 
 
 ## Generating `tutorial/start` from `main`
 
-The `tutorial/start` branch is **not manually maintained** — it is generated from `main` using:
+The `tutorial/start` branch is **not manually maintained** — it is generated automatically from `main` via GitHub Actions, and can also be run manually.
+
+### Automation
+
+`.github/workflows/update-tutorial-branch.yml` triggers on every push to `main` (except `[tutorial-sync]` and `[docs-sync]` commits). It runs `scripts/create-tutorial-branch.sh` and force-pushes the result to `tutorial/start`. No secrets required — uses the default `GITHUB_TOKEN`.
+
+### Manual Run
 
 ```bash
 bash scripts/create-tutorial-branch.sh
+git push -f origin tutorial/start
 ```
 
-This script (lives on `tutorial/start` branch at `scripts/create-tutorial-branch.sh`):
-1. Creates the `tutorial/start` branch from `main`
+### What the Script Does
+
+`scripts/create-tutorial-branch.sh` lives on `main` and:
+
+1. Creates/resets the `tutorial/start` branch from current HEAD using `git checkout -B`
 2. Removes all counter module source files (`x/counter/`, proto files, generated `.pb.go`, tests)
 3. Adds `.gitkeep` placeholders so `x/counter/` and `proto/example/counter/v1/` exist on clone
-4. Strips counter wiring from `app.go` (imports, keeper field, store key, module registration, etc.)
-5. Verifies `go build ./...` still passes
-6. Commits the result
+4. Strips counter wiring from `app.go` (imports, keeper field, store key, module registration, etc.) using cross-platform `perl -i`
+5. Includes `docs/` so tutorial content is available on both branches
+6. Verifies `go build ./...` still passes
+7. Commits with `[tutorial-sync]` tag to prevent the workflow from re-triggering itself
 
-**Rule:** When `main` changes significantly (new features, restructured files), re-run this script to regenerate `tutorial/start`. Don't hand-edit `tutorial/start`.
+**Rule:** Never hand-edit `tutorial/start`. All changes flow from `main` through this script.
 
 ---
 

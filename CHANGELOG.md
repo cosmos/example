@@ -4,6 +4,12 @@ All notable changes to this repository are tracked here for agent context.
 
 ## [Unreleased]
 
+### Tutorial Branch Automation
+
+- Added `scripts/create-tutorial-branch.sh` to `main` (previously only on `tutorial/start`); updated to use `git checkout -B` for existing branch and cross-platform `perl -i` instead of `sed -i ''`
+- Added `.github/workflows/update-tutorial-branch.yml` — regenerates `tutorial/start` automatically on every push to `main`; skips `[tutorial-sync]` and `[docs-sync]` commits to prevent loops
+- Updated `CLAUDE.md` to document the automation
+
 ### Docs Changes
 
 - Renamed tutorial docs to `NN-name.md` format (`01-prerequisites.md` through `05-run-and-test.md`), added `00-overview.md` intro page
