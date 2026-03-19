@@ -3,7 +3,7 @@
 Before starting the tutorial, make sure you have the following tools installed.
 
 <Warning>
-This tutorial is intended for macOS and Linux systems. Other systems may have additional requirements. 
+This tutorial is intended for macOS and Linux systems. Other systems may have additional requirements.
 </Warning>
 
 ## Go
