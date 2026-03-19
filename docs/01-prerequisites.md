@@ -2,13 +2,18 @@
 
 Before starting the tutorial, make sure you have the following tools installed.
 
+<Warning>
+This tutorial is intended for macOS and Linux systems. Other systems may have additional requirements. 
+</Warning>
+
 ## Go
 
-The example chain requires Go 1.22 or higher.
+The example chain requires Go 1.25 or higher.
 
 ```bash
 go version
-# go version go1.22.0 darwin/arm64
+# go version go1.25.0 linux/amd64   # Linux
+# go version go1.25.0 darwin/arm64  # macOS
 ```
 
 If Go is not installed, download it from [go.dev/dl](https://go.dev/dl).
@@ -22,11 +27,10 @@ make --version
 # GNU Make 3.81
 ```
 
-Make is pre-installed on most Linux and macOS systems. On macOS, if it is missing, install it with Xcode command line tools:
+Make is pre-installed on most Linux and macOS systems. If it is missing:
 
-```bash
-xcode-select --install
-```
+- **macOS:** `xcode-select --install`
+- **Linux (Debian/Ubuntu):** `sudo apt install build-essential`
 
 ## Docker
 
@@ -34,7 +38,7 @@ Docker is required to run `make proto-gen`, which generates Go code from the mod
 
 ```bash
 docker --version
-# Docker version 24.0.0
+# Docker version 29.2.1
 ```
 
 Download Docker from [docs.docker.com/get-docker](https://docs.docker.com/get-docker).
@@ -45,17 +49,22 @@ Docker must be running before you execute `make proto-gen`.
 
 ```bash
 git --version
-# git version 2.39.0
+# git version 2.52.0
 ```
 
 ## Clone the repository
+
+Clone [cosmos/example](https://github.com/cosmos/example) and navigate into it:
 
 ```bash
 git clone https://github.com/cosmos/example
 cd example
 ```
 
----
+The repo has two branches used in this tutorial series:
+
+- `main` — the complete chain with the full `x/counter` module wired in.
+- `tutorial/start` — the same chain with the counter module stripped out. Start here if you want to build the module yourself from scratch.
 
 ## Repository Layout
 
@@ -64,7 +73,7 @@ After cloning, the repository looks like this:
 ```text
 example/
 ├── exampled/         # Binary entrypoint (main.go + CLI root command)
-├── app.go            # Chain application — module wiring lives here
+├── app.go            # Chain application, module wiring lives here
 ├── proto/            # Proto definitions for all modules
 ├── x/                # Module implementations
 │   └── counter/      # The example counter module
@@ -73,6 +82,8 @@ example/
 ├── docs/             # This tutorial series
 └── Makefile          # Build, test, and dev commands
 ```
+
+## Where things live
 
 The tutorials in this section will walk you through the most common kinds of chain changes and show you where they usually live in the repo:
 
@@ -83,4 +94,4 @@ The tutorials in this section will walk you through the most common kinds of cha
 
 ---
 
-Next: [Quickstart →](./tutorial-01-quickstart.md)
+Next: [Quickstart →](./02-quickstart.md)

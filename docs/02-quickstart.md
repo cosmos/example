@@ -1,8 +1,12 @@
 # Quickstart
 
-`exampled` is a simple Cosmos SDK chain that shows the core pieces of a working app chain. It includes the basic building-block modules for accounts, bank, staking, distribution, slashing, governance, and more.
+Building on Cosmos is simple: you can start a chain with a [single command](#start-the-chain). This quickstart gets you from zero to a running chain, a submitted transaction, and a queried result in minutes.
 
-This quickstart gets you running `exampled`, submitting a transaction, and querying the result as quickly as possible. It also includes the `x/counter` module, which stores a single counter value, lets you query the current count, and lets you submit `Add` transactions to increment it. In the next tutorials, you'll build a simple version of this module yourself and then walk through the full implementation and its additional features.
+`exampled` is a simple Cosmos SDK chain that shows the core pieces of a working app chain. It includes the basic building-block modules for accounts, bank, staking, distribution, slashing, governance, and more, plus a custom `x/counter` module. In the next tutorials, you'll build a simple version of that module yourself and then walk through the full implementation.
+
+<Note>
+Before continuing, make sure you have completed the [Prerequisites](./01-prerequisites.md) to get your environment set up.
+</Note>
 
 ## Install the binary
 
@@ -96,4 +100,4 @@ In the following tutorials, you will:
 3. See how modules are wired into a chain and how to run the full test suite
 
 
-Next: [Build a Module from Scratch →](./tutorial-02-build-a-module.md)
+Next: [Build a Module from Scratch →](./03-build-a-module.md)

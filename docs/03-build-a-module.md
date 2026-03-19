@@ -1,10 +1,12 @@
 # Build a Module from Scratch
 
-In [quickstart](./tutorial-01-quickstart.md), you started a chain and submitted a transaction to increase the counter. In this tutorial, you'll build a simple counter module from scratch. It follows the same overall structure as the full `x/counter`, but uses a stripped-down version so you can focus on the core steps of building and wiring a module yourself.
+In [quickstart](./02-quickstart.md), you started a chain and submitted a transaction to increase the counter. In this tutorial, you'll build a simple counter module from scratch. It follows the same overall structure as the full `x/counter`, but uses a stripped-down version so you can focus on the core steps of building and wiring a module yourself.
 
-By the end, you'll have built a working module and wired it into a running chain.
+By the end, you'll have built a working module and wired it into a running chain. For a deeper dive into how modules work in the Cosmos SDK, see [Intro to Modules](https://docs.cosmos.network/sdk/next/learn/concepts/modules).
 
-> **Install prerequisites:** Before continuing, follow the [Prerequisites guide](./tutorial-00-prerequisites.md) to make sure everything is installed. This tutorial will not work without them.
+<Note>
+Before continuing, you must follow the [Prerequisites guide](./01-prerequisites.md) to make sure everything is installed.
+</Note>
 
 ## Making modules
 
@@ -71,7 +73,7 @@ You should see empty placeholder directories at `x/counter/` and `proto/example/
 
 ## Step 2: Proto files
 
-Proto files are the source of truth for the module's public API. You define messages and services here. 
+Proto files are the source of truth for the module's public API. You define messages and services here. For a deeper look at how protobuf is used across modules, see [Encoding and Protobuf](https://docs.cosmos.network/sdk/next/learn/concepts/encoding#how-protobuf-is-used-in-modules).
 
 In this tutorial, the counter module stores one number, `Add` increases it by the amount the user submits, and the query returns the current value. 
 
@@ -87,7 +89,7 @@ Then add the following contents to each file.
 
 ### tx.proto
 
-This is the first module file you define. It declares the transaction message shape for `Add`: what the user sends to increment the counter, and what the module returns after handling it. Add the following code to `tx.proto`.
+This is the first module file you define. It declares the transaction message shape for `Add`: what the user sends to increment the counter, and what the module returns after handling it. To learn more about how messages are defined and routed, see [Messages](https://docs.cosmos.network/sdk/next/learn/concepts/transactions#messages). Add the following code to `tx.proto`.
 
 ```proto
 syntax = "proto3";
@@ -123,7 +125,7 @@ message MsgAddResponse {
 
 ### query.proto
 
-This file defines the read-only gRPC query service and the response type for fetching the current count. Add the following code to `query.proto`.
+This file defines the read-only gRPC query service and the response type for fetching the current count. To learn more about how queries differ from transactions, see [Queries](https://docs.cosmos.network/sdk/next/learn/concepts/transactions#queries). Add the following code to `query.proto`.
 
 ```proto
 syntax = "proto3";
@@ -215,7 +217,7 @@ Then add the following contents to each file.
 
 ### keys.go
 
-This file defines the module's basic identifiers: the module name used throughout the SDK, and the store key used to claim the module's KV store namespace.
+This file defines the module's basic identifiers: the module name used throughout the SDK, and the store key used to claim the module's KV store namespace. For more on how modules access state through store keys, see [How modules access state](https://docs.cosmos.network/sdk/next/learn/concepts/store#how-modules-access-state).
 
 ```go
 // x/counter/types/keys.go
@@ -260,7 +262,7 @@ func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 
 ## Step 5: Keeper
 
-In this step, you create the keeper, which is the part of the module that owns the counter state and provides the methods the rest of the module will call.
+In this step, you create the keeper, which is the part of the module that owns the counter state and provides the methods the rest of the module will call. For a conceptual overview of the keeper's role, see [Keeper](https://docs.cosmos.network/sdk/next/learn/concepts/modules#keeper).
 
 Create the keeper file:
 
@@ -348,7 +350,7 @@ func (k *Keeper) ExportGenesis(ctx context.Context) (*types.GenesisState, error)
 
 ## Step 6: MsgServer
 
-In this step, you implement the transaction handler for the generated `MsgServer` interface. This is the code path that runs when a user submits `tx counter add`.
+In this step, you implement the transaction handler for the generated `MsgServer` interface. This is the code path that runs when a user submits `tx counter add`. For a conceptual overview of message execution, see [Message execution](https://docs.cosmos.network/sdk/next/learn/concepts/modules#message-execution-msgserver).
 
 Create the message server file:
 
@@ -394,7 +396,7 @@ func (m msgServer) Add(ctx context.Context, req *types.MsgAddRequest) (*types.Ms
 
 ## Step 7: QueryServer
 
-In this step, you implement the read-only query handler for the generated `QueryServer` interface. This is the code path that runs when someone queries the current counter value.
+In this step, you implement the read-only query handler for the generated `QueryServer` interface. This is the code path that runs when someone queries the current counter value. For more on how modules expose queries, see [Queries](https://docs.cosmos.network/sdk/next/learn/concepts/modules#queries).
 
 Create the query server file:
 
@@ -598,7 +600,7 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 
 ## Step 10: Wire into app.go
 
-In this step, you wire your new module into the application so the chain creates its store, constructs its keeper, and includes it in module startup and genesis handling.
+In this step, you wire your new module into the application so the chain creates its store, constructs its keeper, and includes it in module startup and genesis handling. For a full explanation of what `app.go` does and why the wiring order matters, see [app.go Overview](https://docs.cosmos.network/sdk/next/learn/concepts/app-go).
 
 Open `app.go`. Each code block below starts with the exact marker comment to look for in the file. Paste your code directly below each marker.
 
@@ -695,7 +697,7 @@ make install
 make start
 ```
 
-This builds and installs `exampled` and then runs [`scripts/local_node.sh`](../../scripts/local_node.sh), which:
+This builds and installs `exampled` and then runs `scripts/local_node.sh`, which:
 - resets the local chain data
 - initializes genesis
 - creates and funds the `alice` and `bob` test accounts
@@ -738,4 +740,4 @@ Congratulations, you've just created a Cosmos module from scratch and wired it i
 
 The simple counter module you built here follows the same structure as the full `x/counter` example in the `main` branch. Next, you'll see how the full module extends that foundation with features like params, fee collection, tests, and more.
 
-Next: [Full Counter Module Walkthrough →](./tutorial-03-counter-walkthrough.md)
+Next: [Full Counter Module Walkthrough →](./04-counter-walkthrough.md)

@@ -1,8 +1,6 @@
 # Running and Testing
 
-Now that you've [built a module from scratch](./tutorial-02-build-a-module.md) and walked through the [full counter module](./tutorial-03-counter-walkthrough.md), the next step is learning the workflow for running and validating a production-ready chain. This page shows how to start the chain locally, interact with it through the CLI, and use the main layers of testing before shipping changes.
-
----
+Now that you've [built a module from scratch](./03-build-a-module.md) and walked through the [full counter module](./04-counter-walkthrough.md), the next step is learning the workflow for running and validating a production-ready chain. This page shows how to start the chain locally, interact with it through the CLI, and use the main layers of testing before shipping changes.
 
 ## Single-node local chain
 
@@ -33,8 +31,6 @@ make start
 
 Re-running `make start` resets state automatically. There is no separate reset command.
 
----
-
 ## Localnet (multi-validator)
 
 Use localnet when you want a setup that is closer to a real network. It runs multiple validators in Docker so you can test multi-node behavior locally.
@@ -60,7 +56,7 @@ make localnet-clean
 
 ## CLI reference
 
-Once the chain is running, these are the core CLI commands you'll use to inspect state and submit transactions.
+Once the chain is running, these are the core [CLI](https://docs.cosmos.network/sdk/next/learn/concepts/cli-grpc-rest#cli) commands you'll use to inspect state and submit transactions.
 
 ### Query commands
 
@@ -105,11 +101,42 @@ These flags are the ones you'll use most often while iterating locally.
 | `--node` | RPC endpoint (default: `tcp://localhost:26657`) |
 | `--output json` | Output response as JSON |
 
----
+
+## Node Configuration
+
+When you run `make start`, the chain creates `~/.exampleapp/config/` automatically and initializes two config files inside it:
+
+| File | What it controls |
+|---|---|
+| `app.toml` | SDK application settings: gas prices, pruning, API/gRPC servers, telemetry |
+| `config.toml` | CometBFT settings: peer networking, consensus timeouts, mempool, RPC |
+
+### app.toml
+
+The most common settings to change during development:
+
+| Setting | Default | Description |
+|---|---|---|
+| `minimum-gas-prices` | `"0stake"` | Minimum fee the node accepts before processing a transaction |
+| `pruning` | `"default"` | How much historical state to keep (`default`, `nothing`, `everything`, `custom`) |
+| `api.enable` | `true` | Enables the REST API on port 1317 |
+| `grpc.enable` | `true` | Enables the gRPC server on port 9090 |
+
+### config.toml
+
+The settings most likely to change during development:
+
+| Setting | Default | Description |
+|---|---|---|
+| `moniker` | `"test"` | Human-readable name for the node |
+| `log_level` | `"info"` | Log verbosity (`debug`, `info`, `error`) |
+| `consensus.timeout_commit` | `"5s"` | How long to wait after a block is committed before starting the next one |
+| `p2p.seeds` | `""` | Seed nodes to connect to on a live network |
+| `p2p.persistent_peers` | `""` | Peers to maintain permanent connections to |
 
 ## Unit tests
 
-Start here when you want fast feedback on module logic without running a chain. These tests isolate the keeper and gRPC servers from the rest of the app.
+Start here when you want fast feedback on module logic without running a chain. These tests isolate the [keeper](https://docs.cosmos.network/sdk/next/learn/concepts/testing#keeper-unit-tests) and gRPC servers from the rest of the app.
 
 The unit test logic lives in the counter keeper package on `main`: the shared suite setup is in [x/counter/keeper/keeper_test.go](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper_test.go), message-path tests are in [x/counter/keeper/msg_server_test.go](https://github.com/cosmos/example/blob/main/x/counter/keeper/msg_server_test.go), and query-path tests are in [x/counter/keeper/query_server_test.go](https://github.com/cosmos/example/blob/main/x/counter/keeper/query_server_test.go).
 
@@ -139,11 +166,9 @@ The test suite is structured around three files:
 | `keeper/msg_server_test.go` | `MsgAdd`, event emission, `MsgUpdateParams` |
 | `keeper/query_server_test.go` | `QueryCount`, `QueryParams` |
 
----
-
 ## E2E tests
 
-Run E2E tests when you want to verify the full request path against a real node. They give you higher confidence than unit tests, but take longer to complete.
+Run [E2E tests](https://docs.cosmos.network/sdk/next/learn/concepts/testing#integration-tests) when you want to verify the full request path against a real node. They give you higher confidence than unit tests, but take longer to complete.
 
 The E2E logic lives on `main` in [tests/counter_test.go](https://github.com/cosmos/example/blob/main/tests/counter_test.go), which starts an in-process network, builds signed transactions, and verifies query results. The shared network fixture it uses is defined in [tests/test_helpers.go](https://github.com/cosmos/example/blob/main/tests/test_helpers.go).
 
@@ -155,11 +180,9 @@ go test -v -run TestE2ETestSuite ./tests/...
 
 E2E tests take longer than unit tests because they spin up a real node. Run them before merging significant changes.
 
----
-
 ## Simulation tests
 
-Simulation tests stress the chain with randomized activity to catch edge cases that targeted tests can miss. In this repo, that simulation flow is built with `simsx`, the Cosmos SDK's higher-level simulation framework for defining random on-chain activity at the module level.
+[Simulation tests](https://docs.cosmos.network/sdk/next/learn/concepts/testing#simulation-tests) stress the chain with randomized activity to catch edge cases that targeted tests can miss. In this repo, that simulation flow is built with `simsx`, the Cosmos SDK's higher-level simulation framework for defining random on-chain activity at the module level.
 
 The top-level simulation test commands on `main` run through [sim_test.go](https://github.com/cosmos/example/blob/main/sim_test.go). The counter module's `simsx` registration lives in [x/counter/module.go](https://github.com/cosmos/example/blob/main/x/counter/module.go), the random `MsgAdd` generation lives in [x/counter/simulation/msg_factory.go](https://github.com/cosmos/example/blob/main/x/counter/simulation/msg_factory.go), and randomized counter genesis lives in [x/counter/simulation/genesis.go](https://github.com/cosmos/example/blob/main/x/counter/simulation/genesis.go).
 
@@ -182,8 +205,6 @@ make test-sim
 
 Simulation requires the `sims` build tag, which the Makefile targets handle automatically.
 
----
-
 ## Lint
 
 Linting is the quickest way to catch style problems and common code-quality issues before CI or code review does.
@@ -199,8 +220,6 @@ This installs and runs `golangci-lint` across the repository. To auto-fix issues
 ```bash
 make lint-fix
 ```
-
----
 
 ## Test summary
 

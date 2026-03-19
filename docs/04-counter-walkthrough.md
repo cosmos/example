@@ -1,6 +1,6 @@
 # Full Counter Module Walkthrough
 
-If you came here from the module building tutorial, switch back to the `main` branch first:
+If you came here from the module building tutorial, switch back to the `main` branch of the [`cosmos/example` repo](https://github.com/cosmos/example) first:
 
 ```bash
 git checkout main
@@ -16,24 +16,24 @@ The full counter in the `main` branch adds quite a bit of functionality to the m
 
 | Feature | minimal x/counter | full x/counter |
 |---|---|---|
-| State | `count` | `count` + `params` |
-| Messages | `Add` | `Add` + `UpdateParams` |
-| Queries | `Count` | `Count` + `Params` |
-| Validation | None | `MaxAddValue` limit, overflow check |
-| Fees | None | `AddCost` charged via bank module |
-| Authority | None | Governance-gated param updates |
-| Errors | Generic | Named sentinel errors |
-| Telemetry | None | OpenTelemetry counter metric |
-| CLI | AutoCLI | AutoCLI + `EnhanceCustomCommand` |
-| Simulation | None | `simsx` weighted operations |
-| Block hooks | None | `BeginBlock` + `EndBlock` stubs |
-| Unit tests | None | Full keeper/msg/query test suite |
+| [State](#params-and-authority) | `count` | `count` + `params` |
+| [Messages](#params-and-authority) | `Add` | `Add` + `UpdateParams` |
+| [Queries](#params-and-authority) | `Count` | `Count` + `Params` |
+| [Validation](#expected-keepers-and-fee-collection) | None | `MaxAddValue` limit, overflow check |
+| [Fees](#expected-keepers-and-fee-collection) | None | `AddCost` charged via bank module |
+| [Authority](#params-and-authority) | None | Governance-gated param updates |
+| [Errors](#sentinel-errors) | Generic | Named sentinel errors |
+| [Telemetry](#telemetry) | None | OpenTelemetry counter metric |
+| [CLI](#autocli) | AutoCLI | AutoCLI + `EnhanceCustomCommand` |
+| [Simulation](#simulation) | None | `simsx` weighted operations |
+| [Block hooks](#beginblock-and-endblock) | None | `BeginBlock` + `EndBlock` |
+| [Unit tests](#unit-tests) | None | Full keeper/msg/query test suite |
 
 The wiring code in [`msg_server.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/msg_server.go), [`query_server.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/query_server.go), [`module.go`](https://github.com/cosmos/example/blob/main/x/counter/module.go), and [`types/`](https://github.com/cosmos/example/tree/main/x/counter/types) is structurally similar between the two. Much of the new keeper logic lives in a single method: `AddCount` in [`keeper.go`](https://github.com/cosmos/example/blob/main/x/counter/keeper/keeper.go).
 
 ## Params and authority
 
-A module param is on-chain configuration that controls how the module behaves without changing the code.
+A [module param](https://docs.cosmos.network/sdk/next/learn/concepts/modules#params) is on-chain configuration that controls how the module behaves without changing the code.
 
 The full counter adds a `Params` type that lets the chain governance configure the module's behavior at runtime. In the full module, params control how large an `Add` can be and how much it costs.
 
@@ -142,7 +142,7 @@ This pattern, storing authority in the keeper and checking it in `MsgServer`, is
 
 ## Expected keepers and fee collection
 
-This section shows the standard Cosmos SDK pattern for module-to-module interaction. `x/counter` uses an expected keeper to call into the bank module and charge a fee for each add operation.
+This section shows the standard Cosmos SDK pattern for [module-to-module interaction](https://docs.cosmos.network/sdk/next/learn/concepts/modules#inter-module-access). `x/counter` uses an expected keeper to call into the bank module and charge a fee for each add operation.
 
 ### Where the code lives
 
@@ -300,7 +300,7 @@ This lives in the `maccPerms` map in [`app.go`](https://github.com/cosmos/exampl
 
 ## Sentinel errors
 
-Rather than returning generic errors, `x/counter` defines named errors with registered codes. That makes failures easier to understand and easier for clients to match on programmatically.
+Rather than returning generic errors, `x/counter` defines [named sentinel errors](https://docs.cosmos.network/sdk/next/build/building-modules/errors) with registered codes. That makes failures easier to understand and easier for clients to match on programmatically.
 
 ### Where the code lives
 
@@ -320,7 +320,7 @@ Registered errors produce structured error responses on-chain that clients can m
 
 ## Telemetry
 
-Telemetry records how often the counter is updated so you can observe module activity in an OpenTelemetry-compatible system.
+[Telemetry](https://docs.cosmos.network/sdk/next/learn/advanced/telemetry) records how often the counter is updated so you can observe module activity in an OpenTelemetry-compatible system.
 
 ### Where the code lives
 
@@ -348,7 +348,7 @@ func init() {
 
 ## AutoCLI
 
-AutoCLI exposes the module's queries and transactions as CLI commands. The full module example keeps the same basic AutoCLI setup as the minimal module and adds the recommended setting for custom command integration.
+[AutoCLI](https://docs.cosmos.network/sdk/next/learn/advanced/autocli) exposes the module's queries and transactions as CLI commands. The full module example keeps the same basic AutoCLI setup as the minimal module and adds the recommended setting for custom command integration.
 
 ### Where the code lives
 
@@ -394,7 +394,7 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 
 ## Simulation
 
-Simulation lets the SDK generate randomized transactions against the module during fuzz-style testing.
+[Simulation](https://docs.cosmos.network/sdk/next/build/building-modules/simulator) lets the SDK generate randomized transactions against the module during fuzz-style testing.
 
 ### Where the code lives
 
@@ -440,7 +440,7 @@ func (a AppModule) WeightedOperationsX(weights simsx.WeightSource, reg simsx.Reg
 
 ## BeginBlock and EndBlock
 
-These hooks let a module run code automatically at the start or end of every block. In `x/counter`, they are purposefully empty to demonstrate where and how these features can be added. 
+These [hooks](https://docs.cosmos.network/sdk/next/learn/concepts/modules#block-hooks) let a module run code automatically at the start or end of every block. In `x/counter`, they are purposefully empty to demonstrate where and how these features can be added.
 
 ### Where the code lives
 
@@ -490,7 +490,7 @@ app.ModuleManager.SetOrderEndBlockers(
 
 ## Unit tests
 
-The full module example includes a real test suite for keeper logic, query behavior, message handling, and bank keeper interactions.
+The full module example includes a real [test suite](https://docs.cosmos.network/sdk/next/learn/concepts/testing) for keeper logic, query behavior, message handling, and bank keeper interactions.
 
 ### Where the code lives
 
@@ -548,7 +548,16 @@ s.bankKeeper.SendCoinsFromAccountToModuleFn = func(...) error {
 }
 ```
 
-Next: [Running and Testing →](./tutorial-04-run-and-test.md)
+## Gas
 
+`minimum-gas-prices` in `app.toml` sets the minimum fee a node requires before it will accept and relay a transaction. The local dev chain started by `make start` leaves this empty, so transactions are accepted with no fee beyond the `AddCost` module parameter.
 
-<!-- todo: We need to talk about configuring gas and other configurations. We also need to break up these parts into what the code is and how you wire it into AppDecode to enable it in your chain.  -->
+To require a minimum network fee, set it in `app.toml`:
+
+```toml
+minimum-gas-prices = "0.025stake"
+```
+
+Transactions that don't meet the minimum will be rejected by the node before they reach your module. This is a per-node setting, not a chain-wide consensus rule, so validators on a live network each configure their own threshold.
+
+Next: [Running and Testing →](./05-run-and-test.md)
