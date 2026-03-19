@@ -60,6 +60,7 @@ jobs:
 
           git config user.name  "docs-sync[bot]"
           git config user.email "docs-sync[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/cosmos/docs.git"
 
           # Check for an existing open sync PR
           EXISTING=$(gh pr list \
