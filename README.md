@@ -1,14 +1,18 @@
 # Example Cosmos SDK Application
 
-A minimal Cosmos SDK example application demonstrating best practices for building blockchain modules. This repository serves as a learning resource and starting point for new Cosmos SDK developers.
+This repo shows how straightforward it is to build a custom module and wire it into a chain using the Cosmos SDK. It contains a fully working example chain with a custom counter module, along with step-by-step tutorials that walk you through building it yourself from scratch.
 
-## Features
+## Tutorials
 
-- **Custom Counter Module** - A simple module demonstrating the full module development lifecycle
-- **Complete Test Suite** - Unit tests, integration tests, and simulation tests
-- **AutoCLI Integration** - Automatic CLI command generation
-- **Local Development** - Scripts for single-node and multi-node local networks
-- **Docker Support** - Containerized builds and local network deployment
+Follow these tutorials to learn how to build a Cosmos SDK module from scratch:
+
+| Tutorial | Description |
+|----------|-------------|
+| [Prerequisites](docs/01-prerequisites.md) | Install Go, Make, Docker, and Git |
+| [Quickstart](docs/02-quickstart.md) | Build, install, and run the chain |
+| [Build a Module](docs/03-build-a-module.md) | Build the counter module from scratch |
+| [Counter Walkthrough](docs/04-counter-walkthrough.md) | Walk through the full module implementation |
+| [Run and Test](docs/05-run-and-test.md) | Run a local chain and test the module |
 
 ## Prerequisites
 
