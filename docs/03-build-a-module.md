@@ -602,14 +602,16 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 
 In this step, you wire your new module into the application so the chain creates its store, constructs its keeper, and includes it in module startup and genesis handling. For a full explanation of what `app.go` does and why the wiring order matters, see [app.go Overview](https://docs.cosmos.network/sdk/next/learn/concepts/app-go).
 
-Open `app.go`. Each code block below starts with the exact marker comment to look for in the file. Paste your code directly below each marker.
+Open `app.go` and find each marker comment. Paste the code directly below it.
 
 ### 1. Imports
 
 Add the counter module, keeper, and shared types imports to `app.go`.
 
+Find the comment in `app.go` and add the code directly below it.
+
 ```go
-// counter tutorial app wiring 1: add counter imports here
+// counter tutorial app wiring 1: add counter imports below
 	counter       "github.com/cosmos/example/x/counter"
 	counterkeeper "github.com/cosmos/example/x/counter/keeper"
 	countertypes  "github.com/cosmos/example/x/counter/types"
@@ -620,7 +622,7 @@ Add the counter module, keeper, and shared types imports to `app.go`.
 Store the counter keeper on `ExampleApp` so the rest of the app can reference it.
 
 ```go
-// counter tutorial app wiring 2: add the counter keeper field here
+// counter tutorial app wiring 2: add the counter keeper field below
 CounterKeeper         *counterkeeper.Keeper
 ```
 
@@ -629,7 +631,7 @@ CounterKeeper         *counterkeeper.Keeper
 Give the counter module its own KV store namespace.
 
 ```go
-// counter tutorial app wiring 3: add the counter store key here
+// counter tutorial app wiring 3: add the counter store key below
 countertypes.StoreKey,
 ```
 
@@ -638,7 +640,7 @@ countertypes.StoreKey,
 Construct the counter keeper using the module store and app codec.
 
 ```go
-// counter tutorial app wiring 4: create the counter keeper here
+// counter tutorial app wiring 4: create the counter keeper below
 app.CounterKeeper = counterkeeper.NewKeeper(
 	runtime.NewKVStoreService(keys[countertypes.StoreKey]),
 	appCodec,
@@ -650,7 +652,7 @@ app.CounterKeeper = counterkeeper.NewKeeper(
 Register the counter module with the app's module manager.
 
 ```go
-// counter tutorial app wiring 5: register the counter module here
+// counter tutorial app wiring 5: register the counter module below
 counter.NewAppModule(appCodec, app.CounterKeeper),
 ```
 
@@ -659,7 +661,7 @@ counter.NewAppModule(appCodec, app.CounterKeeper),
 Include the counter module when the app initializes state from genesis.
 
 ```go
-// counter tutorial app wiring 6: add the counter module to genesis order here
+// counter tutorial app wiring 6: add the counter module to genesis order below
 countertypes.ModuleName,
 ```
 
@@ -668,7 +670,7 @@ countertypes.ModuleName,
 Include the counter module when the app exports state back out to genesis.
 
 ```go
-// counter tutorial app wiring 7: add the counter module to export order here
+// counter tutorial app wiring 7: add the counter module to export order below
 countertypes.ModuleName,
 ```
 

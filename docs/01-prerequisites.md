@@ -18,6 +18,26 @@ go version
 
 If Go is not installed, download it from [go.dev/dl](https://go.dev/dl).
 
+### Configure Go Environment Variables
+
+After installing Go, make sure `$GOPATH/bin` is on your `PATH` so installed binaries (like `exampled`) are accessible.
+
+Open your shell config file (`~/.zshrc` on macOS or `~/.bashrc` on Linux) and add:
+
+```bash
+export GOPATH=$HOME/go
+export PATH=$PATH:$GOPATH/bin
+```
+
+Then apply the changes:
+
+```bash
+source ~/.zshrc    # macOS
+source ~/.bashrc   # Linux
+```
+
+Verify: `go env GOPATH`
+
 ## Make
 
 Make is used to run build and development commands throughout the tutorial.

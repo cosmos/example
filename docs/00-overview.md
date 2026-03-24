@@ -29,6 +29,6 @@ If you want to follow along and build the module yourself, start from `tutorial/
 
 3. [Build a Module from Scratch](./03-build-a-module.md): Build a minimal counter module step by step: proto definitions, keeper, message server, query server, and app wiring. Start here if you want to understand how a module comes together.
 
-4. [Full Module Walkthrough](./04-counter-walkthrough.md): Walk through the complete `x/counter` implementation on `main` with additional features. See how to add params, fees, governance-gated updates, sentinel errors, telemetry, and simulation on top of the minimal module.
+4. [Full Module Walkthrough](./04-counter-walkthrough.md): Walk through the complete `x/counter` implementation on `main`. Covers everything added on top of the minimal module: params, governance-gated authority, validation, fees, sentinel errors, telemetry, AutoCLI, simulation, block hooks, and a full unit test suite.
 
 5. [Run and Test](./05-run-and-test.md): Learn the full development workflow: running a local chain, using the CLI, and working with the three layers of testing: unit tests, end-to-end tests, and simulation.
