@@ -10,7 +10,7 @@ Before continuing, you must follow the [Prerequisites guide](./01-prerequisites.
 
 ## Making modules
 
-The Cosmos SDK makes it easy to build custom business logic directly into your chain through modules. Every module follows the same overall pattern:
+The Cosmos SDK makes it easy to build custom business logic directly into your chain through modules. Every module follows the same overall pattern: 
 
 ```text
 proto files → code generation → keeper → msg server → query server → module.go → app wiring
