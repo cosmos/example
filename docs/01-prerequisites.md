@@ -1,6 +1,6 @@
 # Prerequisites
 
-Before starting the tutorial, make sure you have the following tools installed.
+Before starting the tutorial, make sure you have the following tools installed on your machine.
 
 <Warning>
 This tutorial is intended for macOS and Linux systems. Other systems may have additional requirements.
