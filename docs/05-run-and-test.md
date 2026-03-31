@@ -1,4 +1,4 @@
-# Running and Testing
+# Run, Test, and Configure
 
 Now that you've [built a module from scratch](./03-build-a-module.md) and walked through the [full counter module](./04-counter-walkthrough.md), the next step is learning the workflow for running and validating a production-ready chain. This page shows how to start the chain locally, interact with it through the CLI, and use the main layers of testing before shipping changes.
 
