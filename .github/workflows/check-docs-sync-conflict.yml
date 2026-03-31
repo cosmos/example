@@ -96,19 +96,14 @@ jobs:
           OVERLAP_LIST=$(echo "$OVERLAP" | jq -r '.[] | "- `\(.)`"')
           SYNC_PR_LINKS=$(echo "$SYNC_PR_URLS" | tr ' ' '\n' | grep -v '^$' | sed 's/^/- /')
 
-          COMMENT_BODY=$(cat <<EOF
-${MARKER}
-⚠️ **Potential sync conflict detected**
-
+          COMMENT_BODY="${MARKER}
 This PR modifies tutorial docs that are also modified in open sync PR(s) on \`cosmos/docs\`:
 ${SYNC_PR_LINKS}
 
 **Overlapping files:**
 ${OVERLAP_LIST}
 
-These files are kept in sync between the two repos. Merging this PR before the sync PR is resolved may cause conflicts. Please coordinate with the sync PR author or wait until it is merged first.
-EOF
-)
+These files are kept in sync between the two repos. Merging this PR before the sync PR is resolved may cause conflicts. Please coordinate with the sync PR author or wait until it is merged first."
 
           # Update existing comment or post a new one
           EXISTING_COMMENT=$(gh api "repos/cosmos/example/issues/$PR_NUMBER/comments" \
