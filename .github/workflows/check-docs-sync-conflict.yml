@@ -1,0 +1,94 @@
+name: Check for docs site sync conflicts
+
+# When a PR touches docs/, check if there is an open docs-sync PR on
+# cosmos/docs that modifies the same files. If so, post a warning comment
+# so the author knows to coordinate before merging.
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+
+jobs:
+  check-conflict:
+    name: Check for open sync PR conflict
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Check for conflicting sync PR on cosmos/docs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get files changed in this PR that are in docs/
+          THIS_PR_FILES=$(gh pr view "$PR_NUMBER" \
+            --repo cosmos/example \
+            --json files \
+            --jq '[.files[].path | select(startswith("docs/"))] | sort')
+
+          echo "Files changed in this PR: $THIS_PR_FILES"
+
+          if [ "$THIS_PR_FILES" = "[]" ]; then
+            echo "No docs files changed, skipping."
+            exit 0
+          fi
+
+          # Find any open docs-sync PRs on cosmos/docs
+          SYNC_PR=$(gh pr list \
+            --repo cosmos/docs \
+            --label "docs-sync" \
+            --state open \
+            --json number,url,headRefName \
+            --jq '.[0]')
+
+          if [ -z "$SYNC_PR" ] || [ "$SYNC_PR" = "null" ]; then
+            echo "No open sync PR on cosmos/docs, all clear."
+            exit 0
+          fi
+
+          SYNC_PR_NUMBER=$(echo "$SYNC_PR" | jq -r '.number')
+          SYNC_PR_URL=$(echo "$SYNC_PR" | jq -r '.url')
+
+          echo "Found open sync PR: $SYNC_PR_URL"
+
+          # Get files changed in the sync PR (sdk/next/tutorials/example/ paths, map back to docs/)
+          SYNC_PR_FILES=$(gh pr view "$SYNC_PR_NUMBER" \
+            --repo cosmos/docs \
+            --json files \
+            --jq '[.files[].path | select(startswith("sdk/next/tutorials/example/")) | sub("^sdk/next/tutorials/example/(?P<f>[0-9]+-)?"; "docs/") | sub("\\.mdx$"; ".md")] | sort')
+
+          echo "Files in sync PR (mapped): $SYNC_PR_FILES"
+
+          # Find overlapping files
+          OVERLAP=$(jq -n \
+            --argjson a "$THIS_PR_FILES" \
+            --argjson b "$SYNC_PR_FILES" \
+            '[$a[], $b[]] | group_by(.) | map(select(length > 1)) | map(.[0])')
+
+          echo "Overlapping files: $OVERLAP"
+
+          if [ "$OVERLAP" = "[]" ] || [ -z "$OVERLAP" ]; then
+            echo "No overlapping files, all clear."
+            exit 0
+          fi
+
+          # Format the overlap list for the comment
+          OVERLAP_LIST=$(echo "$OVERLAP" | jq -r '.[] | "- `\(.)`"')
+
+          gh pr comment "$PR_NUMBER" \
+            --repo cosmos/example \
+            --body "$(cat <<EOF
+          ⚠️ **Potential sync conflict detected**
+
+          This PR modifies tutorial docs that are also modified in an open sync PR on \`cosmos/docs\`: $SYNC_PR_URL
+
+          **Overlapping files:**
+          $OVERLAP_LIST
+
+          These files are kept in sync between the two repos. Merging this PR before the sync PR is resolved may cause conflicts. Please coordinate with the sync PR author or wait until it is merged first.
+          EOF
+          )"
+
+          echo "Warning comment posted on PR #$PR_NUMBER"
