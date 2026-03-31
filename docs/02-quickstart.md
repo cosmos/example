@@ -1,4 +1,4 @@
-# Quickstart
+# Chain Quickstart
 
 Building on Cosmos is simple: you can start a chain with a [single command](#start-the-chain). This quickstart gets you from zero to a running chain, a submitted transaction, and a queried result in minutes.
 

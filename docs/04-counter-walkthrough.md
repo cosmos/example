@@ -300,7 +300,7 @@ This lives in the `maccPerms` map in [`app.go`](https://github.com/cosmos/exampl
 
 ## Sentinel errors
 
-Rather than returning generic errors, `x/counter` defines [named sentinel errors](https://docs.cosmos.network/sdk/next/build/building-modules/errors) with registered codes. That makes failures easier to understand and easier for clients to match on programmatically.
+Rather than returning generic errors, `x/counter` defines named sentinel errors with registered codes. That makes failures easier to understand and easier for clients to match on programmatically.
 
 ### Where the code lives
 
@@ -316,11 +316,13 @@ var (
 )
 ```
 
-Registered errors produce structured error responses on-chain that clients can match against by code, not just by string.
+Registered errors produce structured error responses on-chain that clients can match against by code, not just by string. Each error code must be unique within the module and greater than zero (code `1` is reserved for internal SDK errors). To check whether an error is of a specific sentinel type, use `errors.Is(err, ErrInsufficientFunds)` — this works correctly even when the error has been wrapped with additional context via `errorsmod.Wrap` or `errorsmod.Wrapf`.
+
+All validation — both stateless field checks and stateful business logic checks — should live in the `msgServer` method or the keeper function it calls. The older `ValidateBasic` method on message types is deprecated: prefer performing all validation inside the message server. If your message type does implement `ValidateBasic`, the SDK still calls it for backward compatibility, but new modules should not rely on it.
 
 ## Telemetry
 
-[Telemetry](https://docs.cosmos.network/sdk/next/learn/advanced/telemetry) records how often the counter is updated so you can observe module activity in an OpenTelemetry-compatible system.
+[Telemetry](https://docs.cosmos.network/sdk/next/guides/testing/telemetry) records how often the counter is updated so you can observe module activity in an OpenTelemetry-compatible system.
 
 ### Where the code lives
 
@@ -348,7 +350,7 @@ func init() {
 
 ## AutoCLI
 
-[AutoCLI](https://docs.cosmos.network/sdk/next/learn/advanced/autocli) exposes the module's queries and transactions as CLI commands. The full module example keeps the same basic AutoCLI setup as the minimal module and adds the recommended setting for custom command integration.
+[AutoCLI](https://docs.cosmos.network/sdk/next/guides/tooling/autocli) exposes the module's queries and transactions as CLI commands. The full module example keeps the same basic AutoCLI setup as the minimal module and adds the recommended setting for custom command integration.
 
 ### Where the code lives
 
@@ -394,7 +396,7 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
 
 ## Simulation
 
-[Simulation](https://docs.cosmos.network/sdk/next/build/building-modules/simulator) lets the SDK generate randomized transactions against the module during fuzz-style testing.
+[Simulation](https://docs.cosmos.network/sdk/next/guides/testing/simulator) lets the SDK generate randomized transactions against the module during fuzz-style testing.
 
 ### Where the code lives
 

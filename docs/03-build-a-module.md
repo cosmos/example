@@ -738,6 +738,8 @@ count: "4"
 
 Congratulations, you've just created a Cosmos module from scratch and wired it into a real chain!
 
+If you are planning to build a production module, see [Module Design Considerations](https://docs.cosmos.network/sdk/next/guides/module-design/module-design-considerations) for guidance on state structure, message surface, dependencies, and upgrade planning before you ship.
+
 ## Next steps
 
 The simple counter module you built here follows the same structure as the full `x/counter` example in the `main` branch. Next, you'll see how the full module extends that foundation with features like params, fee collection, tests, and more.

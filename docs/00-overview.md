@@ -1,4 +1,4 @@
-# Build a Chain
+# Tutorial Intro
 
 The Cosmos SDK is a developer-first framework for building custom blockchains. This tutorial series shows you how to build a module from scratch, wire it into a chain, and run it locally, all in minutes.
 
