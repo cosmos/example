@@ -2,7 +2,7 @@
 
 In [quickstart](./02-quickstart.md), you started a chain and submitted a transaction to increase the counter. In this tutorial, you'll build a simple counter module from scratch. It follows the same overall structure as the full `x/counter`, but uses a stripped-down version so you can focus on the core steps of building and wiring a module yourself.
 
-By the end, you'll have built a working module and wired it into a running chain. For a deeper dive into how modules work in the Cosmos SDK, see [Intro to Modules](https://docs.cosmos.network/sdk/next/learn/concepts/modules).
+By the end, you'll have built a working module and wired it into a running chain. For a deeper dive into how modules work in the Cosmos SDK, see [Intro to Modules](https://docs.cosmos.network/sdk/next/learn/concepts/modules). 
 
 <Note>
 Before continuing, you must follow the [Prerequisites guide](./01-prerequisites.md) to make sure everything is installed.
