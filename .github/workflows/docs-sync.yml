@@ -35,6 +35,7 @@ jobs:
           # Fine-grained PAT with contents:write and pull-requests:write on cosmos/docs
           token: ${{ secrets.DOCS_REPO_TOKEN }}
           path: cosmos-docs
+          persist-credentials: false
 
       - name: Transform docs → Mintlify format
         run: |
