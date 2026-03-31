@@ -1,0 +1,125 @@
+name: Check for docs site sync conflicts
+
+# When a PR touches docs/, check if any open docs-sync PRs on cosmos/docs
+# modify the same files. If so, post or update a warning comment on this PR.
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+
+jobs:
+  check-conflict:
+    name: Check for open sync PR conflict
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Check for conflicting sync PR on cosmos/docs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Get files changed in this PR that are in docs/
+          THIS_PR_FILES=$(gh pr view "$PR_NUMBER" \
+            --repo cosmos/example \
+            --json files \
+            --jq '[.files[].path | select(startswith("docs/"))] | sort')
+
+          echo "Files changed in this PR: $THIS_PR_FILES"
+
+          # Get all open docs-sync PRs on cosmos/docs
+          SYNC_PRS=$(gh pr list \
+            --repo cosmos/docs \
+            --label "docs-sync" \
+            --state open \
+            --json number,url)
+
+          echo "Open sync PRs: $SYNC_PRS"
+
+          if [ "$SYNC_PRS" = "[]" ] || [ -z "$SYNC_PRS" ]; then
+            echo "No open sync PRs on cosmos/docs, all clear."
+            exit 0
+          fi
+
+          # Collect all files from all open sync PRs, mapped back to docs/ paths
+          ALL_SYNC_FILES="[]"
+          SYNC_PR_URLS=""
+
+          while IFS= read -r pr; do
+            SYNC_PR_NUMBER=$(echo "$pr" | jq -r '.number')
+            SYNC_PR_URL=$(echo "$pr" | jq -r '.url')
+            SYNC_PR_URLS="$SYNC_PR_URLS $SYNC_PR_URL"
+
+            SYNC_FILES=$(gh pr view "$SYNC_PR_NUMBER" \
+              --repo cosmos/docs \
+              --json files \
+              --jq '[.files[].path
+                | select(startswith("sdk/next/tutorials/example/"))
+                | sub("^sdk/next/tutorials/example/([0-9]+-)?"; "docs/")
+                | sub("\\.mdx$"; ".md")
+              ] | sort')
+
+            ALL_SYNC_FILES=$(jq -n \
+              --argjson a "$ALL_SYNC_FILES" \
+              --argjson b "$SYNC_FILES" \
+              '$a + $b | unique | sort')
+          done < <(echo "$SYNC_PRS" | jq -c '.[]')
+
+          echo "All sync PR files (mapped): $ALL_SYNC_FILES"
+
+          # Find overlapping files
+          OVERLAP=$(jq -n \
+            --argjson a "$THIS_PR_FILES" \
+            --argjson b "$ALL_SYNC_FILES" \
+            '[$a[], $b[]] | group_by(.) | map(select(length > 1)) | map(.[0])')
+
+          echo "Overlapping files: $OVERLAP"
+
+          MARKER="<!-- docs-sync-conflict-check -->"
+
+          if [ "$OVERLAP" = "[]" ] || [ -z "$OVERLAP" ]; then
+            echo "No overlapping files, all clear."
+            # If a previous warning comment exists, update it to say all clear
+            EXISTING_COMMENT=$(gh api "repos/cosmos/example/issues/$PR_NUMBER/comments" \
+              --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -1)
+            if [ -n "$EXISTING_COMMENT" ]; then
+              gh api "repos/cosmos/example/issues/comments/$EXISTING_COMMENT" \
+                -X PATCH \
+                -f body="$MARKER
+          ✅ **Sync conflict resolved** — no overlapping files with open sync PRs on \`cosmos/docs\`."
+            fi
+            exit 0
+          fi
+
+          OVERLAP_LIST=$(echo "$OVERLAP" | jq -r '.[] | "- `\(.)`"')
+          SYNC_PR_LINKS=$(echo "$SYNC_PR_URLS" | tr ' ' '\n' | grep -v '^$' | sed 's/^/- /')
+
+          COMMENT_BODY=$(cat <<EOF
+${MARKER}
+⚠️ **Potential sync conflict detected**
+
+This PR modifies tutorial docs that are also modified in open sync PR(s) on \`cosmos/docs\`:
+${SYNC_PR_LINKS}
+
+**Overlapping files:**
+${OVERLAP_LIST}
+
+These files are kept in sync between the two repos. Merging this PR before the sync PR is resolved may cause conflicts. Please coordinate with the sync PR author or wait until it is merged first.
+EOF
+)
+
+          # Update existing comment or post a new one
+          EXISTING_COMMENT=$(gh api "repos/cosmos/example/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -1)
+
+          if [ -n "$EXISTING_COMMENT" ]; then
+            gh api "repos/cosmos/example/issues/comments/$EXISTING_COMMENT" \
+              -X PATCH \
+              -f body="$COMMENT_BODY"
+            echo "Updated existing warning comment."
+          else
+            gh pr comment "$PR_NUMBER" --repo cosmos/example --body "$COMMENT_BODY"
+            echo "Posted new warning comment."
+          fi
