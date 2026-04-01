@@ -40,7 +40,7 @@ Verify: `go env GOPATH`
 
 ## Make
 
-Make is used to run build and development commands throughout the tutorial.
+Make is used to run build and development commands throughout this tutorial.
 
 ```bash
 make --version
@@ -74,7 +74,7 @@ git --version
 
 ## Clone the repository
 
-Clone [cosmos/example](https://github.com/cosmos/example) and navigate into it:
+Clone [cosmos/example](https://github.com/cosmos/example) and navigate into it. 
 
 ```bash
 git clone https://github.com/cosmos/example
