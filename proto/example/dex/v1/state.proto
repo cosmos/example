@@ -1,0 +1,13 @@
+syntax = "proto3";
+package example.dex;
+
+option go_package = "github.com/cosmos/example/x/dex/types";
+
+// Pool — state of AMM pool in KV
+message Pool {
+  string id = 1;
+  string denom_a = 2;
+  string denom_b = 3;
+  string reserve_a = 4;
+  string reserve_b = 5;
+}

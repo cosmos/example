@@ -1,0 +1,11 @@
+syntax = "proto3";
+package example.dex;
+
+import "example/dex/v1/state.proto";
+import "gogoproto/gogo.proto";
+  
+option go_package = "github.com/cosmos/example/x/dex/types";
+
+message GenesisState {
+  repeated Pool pools = 1 [(gogoproto.nullable) = false];
+}

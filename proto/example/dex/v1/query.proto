@@ -1,0 +1,23 @@
+syntax = "proto3";
+package example.dex;
+
+import "example/dex/v1/state.proto";
+import "google/api/annotations.proto";
+
+option go_package = "github.com/cosmos/example/x/dex/types";
+
+service Query {
+  rpc Pool(QueryPoolRequest) returns (QueryPoolResponse){
+    option (google.api.http).get = "/example/dex/v1/pool/{pool_id}";
+  }
+}
+
+message QueryPoolRequest {
+  string pool_id = 1;
+}
+
+message QueryPoolResponse {
+  Pool pool = 1;
+}
+
+

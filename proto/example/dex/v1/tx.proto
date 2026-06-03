@@ -1,0 +1,25 @@
+syntax = "proto3";
+package example.dex;
+
+import "cosmos/msg/v1/msg.proto";
+import "cosmos_proto/cosmos.proto";
+
+option go_package = "github.com/cosmos/example/x/dex/types";
+
+service Msg {
+  option (cosmos.msg.v1.service) = true;
+  rpc Swap(MsgSwap) returns (MsgSwapResponse);
+}
+
+message MsgSwap {
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
+  string amount_in = 2;
+  string min_amount_out = 3;
+  string pool_id = 4;
+  string denom_in = 5;
+}
+
+message MsgSwapResponse {
+  string amount_out = 1;
+}
