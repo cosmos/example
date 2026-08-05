@@ -1,12 +1,20 @@
 DOCKER := $(shell which docker)
 PROTO_BUILDER_IMAGE := example-proto-builder
 
+VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+ldflags = -X github.com/cosmos/cosmos-sdk/version.Name=example \
+	-X github.com/cosmos/cosmos-sdk/version.AppName=exampled \
+	-X github.com/cosmos/cosmos-sdk/version.Version=$(VERSION) \
+	-X github.com/cosmos/cosmos-sdk/version.Commit=$(COMMIT)
+
 build:
-	go build -o ./build/myapp ./exampled
+	go build -ldflags '$(ldflags)' -o ./build/myapp ./exampled
 
 
 install:
-	go install ./exampled
+	go install -ldflags '$(ldflags)' ./exampled
 
 start: install
 	./scripts/local_node.sh
@@ -51,17 +59,26 @@ lint-fix:
 ###                                Simulation                               ###
 ###############################################################################
 
+# simsx runs every simulation across 38 built-in seeds. The SDK defaults of 500
+# blocks x 200 operations per seed do not finish in any reasonable time, so the
+# targets below use smaller values. Override to simulate more deeply, e.g.
+#   make test-sim-full SIM_NUM_BLOCKS=500 SIM_BLOCK_SIZE=200 SIM_TIMEOUT=4h
+SIM_NUM_BLOCKS ?= 50
+SIM_BLOCK_SIZE ?= 100
+SIM_TIMEOUT ?= 30m
+SIM_FLAGS = -NumBlocks=$(SIM_NUM_BLOCKS) -BlockSize=$(SIM_BLOCK_SIZE)
+
 test-sim-full:
 	@echo "--> Running full app simulation"
-	go test -tags sims -run TestFullAppSimulation -v -timeout 30m
+	go test -tags sims -run TestFullAppSimulation -v -timeout $(SIM_TIMEOUT) $(SIM_FLAGS)
 
 test-sim-determinism:
 	@echo "--> Running determinism simulation"
-	go test -tags sims -run TestAppStateDeterminism -v -timeout 30m
+	go test -tags sims -run TestAppStateDeterminism -v -timeout $(SIM_TIMEOUT) $(SIM_FLAGS)
 
 test-sim:
 	@echo "--> Running all simulation tests"
-	go test -tags sims -v -timeout 60m
+	go test -tags sims -v -timeout $(SIM_TIMEOUT) $(SIM_FLAGS)
 
 .PHONY: test-sim-full test-sim-determinism test-sim
 

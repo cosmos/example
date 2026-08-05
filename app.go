@@ -332,7 +332,6 @@ func NewExampleApp(
 		distrtypes.ModuleName,
 		slashingtypes.ModuleName,
 		stakingtypes.ModuleName,
-		// counter tutorial app wiring 6: add the counter module to genesis order below
 		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	)
@@ -340,7 +339,6 @@ func NewExampleApp(
 		banktypes.ModuleName,
 		govtypes.ModuleName,
 		stakingtypes.ModuleName,
-		// counter tutorial app wiring 7: add the counter module to export order below
 		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	)
@@ -356,6 +354,7 @@ func NewExampleApp(
 		govtypes.ModuleName,
 		consensusparamtypes.ModuleName,
 		vestingtypes.ModuleName,
+		// counter tutorial app wiring 6: add the counter module to genesis order below
 		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
@@ -369,6 +368,7 @@ func NewExampleApp(
 		slashingtypes.ModuleName,
 		govtypes.ModuleName,
 		vestingtypes.ModuleName,
+		// counter tutorial app wiring 7: add the counter module to export order below
 		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	}

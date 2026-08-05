@@ -27,11 +27,12 @@ The primary audience is Cosmos SDK developers learning module development. The d
 
 | File | Content |
 |---|---|
-| `tutorial-00-prerequisites.md` | Prerequisites: Go, Make, Docker, Git; repo layout overview |
-| `tutorial-01-quickstart.md` | Fast path: build, install, run chain, send a tx |
-| `tutorial-02-build-a-module.md` | Step-by-step: build a minimal counter module from scratch |
-| `tutorial-03-counter-walkthrough.md` | Walk through full module (main branch) — params, fees, auth, errors, telemetry, sim |
-| `tutorial-04-run-and-test.md` | Running a local chain, localnet, CLI reference, all test layers |
+| `00-overview.md` | Series intro: what you build, branch overview, page-by-page summary |
+| `01-prerequisites.md` | Prerequisites: Go, Make, Docker, Git; repo layout overview |
+| `02-quickstart.md` | Fast path: build, install, run chain, send a tx |
+| `03-build-a-module.md` | Step-by-step: build a minimal counter module from scratch |
+| `04-counter-walkthrough.md` | Walk through full module (main branch): params, fees, auth, errors, telemetry, sim |
+| `05-run-and-test.md` | Running a local chain, localnet, CLI reference, all test layers |
 
 ---
 
@@ -75,11 +76,14 @@ Docs in `docs/` are kept in sync with the Cosmos docs site repo (`cosmos/docs`) 
 
 | `example` repo | Docs site |
 |---|---|
-| `docs/prerequisites.md` | `sdk/next/tutorials/example/prerequisites.mdx` |
-| `docs/quickstart.md` | `sdk/next/tutorials/example/quickstart.mdx` |
-| `docs/build-a-module.md` | `sdk/next/tutorials/example/build-a-module.mdx` |
-| `docs/counter-walkthrough.md` | `sdk/next/tutorials/example/counter-walkthrough.mdx` |
-| `docs/run-and-test.md` | `sdk/next/tutorials/example/run-and-test.mdx` |
+| `docs/00-overview.md` | `sdk/next/tutorials/example/00-overview.mdx` |
+| `docs/01-prerequisites.md` | `sdk/next/tutorials/example/01-prerequisites.mdx` |
+| `docs/02-quickstart.md` | `sdk/next/tutorials/example/02-quickstart.mdx` |
+| `docs/03-build-a-module.md` | `sdk/next/tutorials/example/03-build-a-module.mdx` |
+| `docs/04-counter-walkthrough.md` | `sdk/next/tutorials/example/04-counter-walkthrough.mdx` |
+| `docs/05-run-and-test.md` | `sdk/next/tutorials/example/05-run-and-test.mdx` |
+
+`transform.py` maps names by swapping the extension only, so the `NN-` prefix carries through to the docs site.
 
 ### Format differences
 
@@ -222,8 +226,13 @@ make localnet-start # Start localnet
 
 ## Go Dependencies
 
-- `github.com/cosmos/cosmos-sdk v0.54.0-rc.1`
+- `github.com/cosmos/cosmos-sdk v0.55.0`
+- `github.com/cosmos/cosmos-sdk/store/v2 v2.0.0`
 - `cosmossdk.io/core v1.1.0`
 - `cosmossdk.io/collections v1.4.0`
-- `github.com/cometbft/cometbft v0.39.0-beta.2`
-- Go 1.25.7
+- `github.com/cometbft/cometbft v0.40.0`
+- Go 1.26.5
+
+Store types moved from `cosmossdk.io/store` to `github.com/cosmos/cosmos-sdk/store/v2` in the v0.55 upgrade. The `Dockerfile` Go pin must be kept in step with `go.mod`, or `make localnet-init` fails.
+
+Do not give `ARG TARGETOS` / `ARG TARGETARCH` defaults in the `Dockerfile`. A hardcoded default overrides the platform BuildKit supplies, cross-compiling a binary that then runs under emulation. Emulated x86 mis-executes the AVX2 `chacha20poly1305` assembly, which breaks the CometBFT P2P handshake and silently prevents localnet nodes from peering.

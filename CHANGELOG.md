@@ -4,6 +4,66 @@ All notable changes to this repository are tracked here for agent context.
 
 ## [Unreleased]
 
+### Docs Updates for SDK v0.55 Upgrade
+
+- `01-prerequisites.md`: bumped required Go version from 1.25 to 1.26 to match `go.mod` (`go 1.26.5`) after the SDK/CometBFT upgrade. This was the only doc breakage caused by the upgrade itself; no doc references `traceStore`, the `cosmossdk.io/store` → `cosmos-sdk/store/v2` move, or the dropped legacy-subspace args.
+- `03-build-a-module.md`: fixed the keeper field snippet in Step 10.2 to match the gofmt'd spacing in `app.go`.
+
+### Tutorial Wiring Fix
+
+- `app.go`: moved the `counter tutorial app wiring 6` and `7` marker comments out of `SetOrderBeginBlockers` / `SetOrderEndBlockers` and into `genesisModuleOrder` / `exportModuleOrder`, where the doc headings ("Genesis Order", "Export Order") always said they were. Previously a reader following `03-build-a-module.md` never added the counter module to the genesis or export lists and hit `panic: all modules must be defined when setting SetOrderInitGenesis, missing: [counter]` at startup. The minimal tutorial module has no block hooks, so it does not belong in the blocker lists; the full module on `main` is still listed there. Verified by regenerating `tutorial/start`, following the tutorial verbatim, and running the chain: `tx counter add 4` returns `code: 0` and `query counter count` returns `count: "4"`.
+
+### Overflow Check Fix
+
+- `x/counter/keeper/keeper.go`: replaced the guard in `AddCount`. It read `if amount >= math.MaxUint64`, which for a `uint64` can only ever be true at exactly `MaxUint64` (staticcheck SA4003) and, more importantly, tested the wrong quantity: overflow occurs at `count + amount`, which Go wraps silently, leaving the counter holding a smaller value with no error. It now checks `amount > math.MaxUint64-count`, written as a subtraction so the comparison cannot overflow. Reachable in practice because `MaxAddValue = 0` disables the per-add cap, letting a single add wrap the counter.
+- Moved the `GetCount` read above the fee charge so all validation completes before the user is charged.
+- Added two `TestAddCount` cases: an add that would wrap with `MaxAddValue` disabled (must error, state unchanged) and an add landing exactly on `MaxUint64` (must succeed). The first fails against the previous implementation, which wrapped the counter to `0` and returned no error.
+- `04-counter-walkthrough.md`: updated the `AddCount` snippet and added a note on why the guard tests the result rather than the input. This also makes the feature table's "overflow check" claim true.
+
+### Error Code Fix
+
+- `x/counter/keeper/errors.go`: changed the registered sentinel error codes from `0, 1, 2` to `2, 3, 4`. Code `0` is the ABCI success code, so a transaction failing with `ErrNumTooLarge` reported `code: 0` and read as a success to every client. Code `1` is reserved for internal errors.
+- `04-counter-walkthrough.md`: updated the `errors.go` snippet and corrected the surrounding prose, which claimed codes must be greater than zero while the code registered one at zero.
+
+### Docs Accuracy Fixes
+
+All claims below were checked against a running chain, not against library default constants. Values the application overrides differ from the upstream defaults, so reading the SDK or CometBFT source alone gives the wrong answer.
+
+- `04-counter-walkthrough.md`: updated the `UpdateParams` snippet to match the explicit error check in `msg_server.go`; documented the real `NewKeeper(storeService, cdc, bankKeeper, opts ...Options)` signature and the `WithAuthority` option, which the authority section had never mentioned.
+- `04-counter-walkthrough.md`: the Gas section claimed `make start` "leaves `minimum-gas-prices` empty". It is set to `0stake` by `initAppConfig` in `exampled/cmd/commands.go`.
+- `02-quickstart.md`: fixed the indentation of the `query counter params` sample output. The doc indented the `add_cost` list item by four spaces; the real YAML output puts the dash at two.
+- `05-run-and-test.md`: annotated `minimum-gas-prices` (`0stake`, set by this chain, not the SDK, whose default is empty) and `timeout_commit` (`5s`, the SDK raises CometBFT's own `1s` default in `server/util.go`). Both table values were already correct and are unchanged.
+- `05-run-and-test.md`: `api.enable` is `false` by SDK default and only reads `true` because `scripts/local_node.sh` sets it. The table now says so rather than presenting `true` as the stock default.
+
+### Simulation
+
+- `Makefile`: the three `test-sim*` targets passed no simulation flags, so each ran the SDK defaults of 500 blocks and 200 operations per block across the 38 seeds hardcoded in `simsx.Run`. None could finish inside their own timeout: `make test-sim-full` died with `panic: test timed out after 30m0s` and `make test-sim` with `test timed out` after 60m. All three are documented in `05-run-and-test.md` as validation commands, so all three were failing for anyone who ran them.
+- Added overridable `SIM_NUM_BLOCKS` (50), `SIM_BLOCK_SIZE` (100), and `SIM_TIMEOUT` (30m). Measured after the change: `make test-sim-determinism` passes in 551s and `make test-sim-full` in 663s.
+- `05-run-and-test.md`: documented the ~10 minute runtime per target, the 38-seed sweep, and how to override the parameters for a deeper simulation.
+
+### Localnet
+
+- `Dockerfile`: bumped the build stage from `golang:1.25-alpine` to `golang:1.26-alpine`. The SDK upgrade raised `go.mod` to `go 1.26.5` without touching the Dockerfile, so `make localnet-init` failed outright with `go: go.mod requires go >= 1.26.5 (running go 1.25.12)`. Verified by a clean image build.
+- `05-run-and-test.md`: rewrote the localnet section. It is one validator plus three full nodes, not four validators, because `init.sh` creates a single gentx. Added the Docker prerequisite, the 16 host ports required, the multi-minute cold start, the fact that `localnet-logs` follows and needs Ctrl+C, and that `localnet-clean` deletes without confirming. Also documented that the chain ID is `example-localnet` with a single `validator` key, not `demo` with `alice`/`bob`.
+- `Dockerfile`: removed the `=linux` and `=amd64` defaults from `ARG TARGETOS` / `ARG TARGETARCH`. This is the root cause of the long-standing localnet P2P failure. The hardcoded default beat BuildKit's platform value, so on an arm64 host `make build-docker` cross-compiled an **amd64 binary into an arm64 image**, which Docker then ran under x86 emulation.
+
+  The emulator advertises AVX2 and BMI2, so `golang.org/x/crypto/chacha20poly1305` dispatched to its AVX2 assembly path, which the emulator mis-executes. An RFC 8439 known-answer test fails under emulation and passes natively, and `Seal` and `Open` go wrong differently, so even two identical emulated binaries cannot talk to each other. The AVX2 bulk path engages above 320 bytes and CometBFT's P2P frame is a fixed 1028 bytes, which is why every handshake failed, in both directions, 100% of the time, with `chacha20poly1305: message authentication failed`. X25519 is unaffected, which is why TCP, protobuf framing, ed25519, and single-node block production all worked and masked the problem.
+
+  Verified end to end: all four nodes reach `n_peers=3` and advance in lockstep, zero `chacha20poly1305` errors, and a counter transaction submitted on `node0` replicates to `node2`.
+
+Remaining localnet hygiene, not required for it to work and confirmed to predate this upgrade:
+
+- `scripts/localnet/init.sh` sets `persistent_peers` before running the genesis commands, and `collect-gentxs` then rewrites `node0`'s `config.toml` and blanks the field. Harmless in practice: `node0` still reaches three peers via inbound dials.
+- `addr_book_strict` is left at `true`. It does not in fact reject the compose network's `192.168.10.0/25` addresses.
+
+### Lint
+
+- `make lint` is documented in `05-run-and-test.md` as a validation command but failed on the repo's own code. The `staticcheck` SA4003 finding was the ineffective overflow guard, fixed above. The three remaining `errcheck` findings are now handled with explicit discards: `fmt.Fprintln` in `exampled/main.go`, `s.conn.Close` in `tests/counter_test.go`, and the deferred `os.RemoveAll` in `tests/test_helpers.go`. `make lint` now reports `0 issues`.
+
+### Build
+
+- `Makefile`: added `-ldflags` injecting `version.Name`, `AppName`, `Version`, and `Commit` into `build` and `install`. Previously `make install` was a bare `go install`, so `exampled version` printed an empty line despite `02-quickstart.md` telling readers to run it to verify the install. It now prints the `git describe` version.
+
 ### Docs Sync Fixes
 
 - Fixed `git diff --quiet` in both sync workflows — it missed untracked files (new tutorial pages would silently skip sync). Replaced with `git status --porcelain <dir>` which catches new, modified, and deleted files.
