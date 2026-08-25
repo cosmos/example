@@ -1,6 +1,6 @@
 # Prerequisites
 
-Before starting the tutorial, make sure you have the following tools installed.
+Before starting the tutorial, make sure you have the following tools installed on your machine.
 
 <Warning>
 This tutorial is intended for macOS and Linux systems. Other systems may have additional requirements.
@@ -8,12 +8,12 @@ This tutorial is intended for macOS and Linux systems. Other systems may have ad
 
 ## Go
 
-The example chain requires Go 1.25 or higher. 
+The example chain requires Go 1.26 or higher. 
 
 ```bash
 go version
-# go version go1.25.0 linux/amd64   # Linux
-# go version go1.25.0 darwin/arm64  # macOS
+# go version go1.26.5 linux/amd64   # Linux
+# go version go1.26.5 darwin/arm64  # macOS
 ```
 
 If Go is not installed, download it from [go.dev/dl](https://go.dev/dl).
@@ -40,7 +40,7 @@ Verify: `go env GOPATH`
 
 ## Make
 
-Make is used to run build and development commands throughout this tutorial.
+Make is used to run build and development commands throughout the tutorial.
 
 ```bash
 make --version
@@ -74,7 +74,7 @@ git --version
 
 ## Clone the repository
 
-Clone [cosmos/example](https://github.com/cosmos/example) and navigate into it. 
+Clone [cosmos/example](https://github.com/cosmos/example) and navigate into it:
 
 ```bash
 git clone https://github.com/cosmos/example

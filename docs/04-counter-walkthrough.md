@@ -127,7 +127,12 @@ func (m msgServer) UpdateParams(ctx context.Context, msg *types.MsgUpdateParams)
         return nil, sdkerrors.Wrapf(govtypes.ErrInvalidSigner,
             "invalid authority; expected %s, got %s", m.authority, msg.Authority)
     }
-    return &types.MsgUpdateParamsResponse{}, m.SetParams(ctx, msg.Params)
+
+    if err := m.SetParams(ctx, msg.Params); err != nil {
+        return nil, err
+    }
+
+    return &types.MsgUpdateParamsResponse{}, nil
 }
 ```
 
@@ -138,6 +143,23 @@ authority: authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 ```
 
 This pattern, storing authority in the keeper and checking it in `MsgServer`, is the standard Cosmos SDK approach to governance-gated configuration.
+
+To point a module at a different authority, `NewKeeper` accepts functional options. `WithAuthority` replaces the default after the keeper is built:
+
+```go
+// x/counter/keeper/keeper.go
+type Options func(k *Keeper)
+
+// WithAuthority sets a custom authority on the module. This allows developers to set accounts other than the
+// governance module to control this module's params.
+func WithAuthority(authority string) Options {
+    return func(k *Keeper) {
+        k.authority = authority
+    }
+}
+```
+
+Most chains keep the governance default, so `app.go` passes no options.
 
 
 ## Expected keepers and fee collection
@@ -174,6 +196,8 @@ app.CounterKeeper = counterkeeper.NewKeeper(
     app.BankKeeper,
 )
 ```
+
+The full signature is `NewKeeper(storeService, cdc, bankKeeper, opts ...Options)`. The trailing options are how you override the default governance authority, covered in [the authority pattern](#the-authority-pattern) above.
 
 ### Try it
 
@@ -222,10 +246,6 @@ type Keeper struct {
 
 ```go
 func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (uint64, error) {
-    if amount >= math.MaxUint64 {
-        return 0, ErrNumTooLarge
-    }
-
     params, err := k.GetParams(ctx)
     if err != nil {
         return 0, err
@@ -235,6 +255,21 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
         return 0, ErrExceedsMaxAdd
     }
 
+    count, err := k.GetCount(ctx)
+    if err != nil {
+        return 0, err
+    }
+
+    // Reject adds that would wrap the counter past the top of the uint64 range.
+    // Written as a subtraction so the check itself cannot overflow. MaxAddValue
+    // usually keeps amount small, but setting it to 0 disables that cap, so the
+    // result has to be checked here rather than inferred from the input.
+    if amount > math.MaxUint64-count {
+        return 0, ErrNumTooLarge
+    }
+
+    // Charge the user if add cost is set. All validation happens above, so a
+    // rejected add never reaches this point.
     if !params.AddCost.IsZero() {
         senderAddr, err := sdk.AccAddressFromBech32(sender)
         if err != nil {
@@ -243,11 +278,6 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
         if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, senderAddr, types.ModuleName, params.AddCost); err != nil {
             return 0, sdkerrors.Wrap(ErrInsufficientFunds, err.Error())
         }
-    }
-
-    count, err := k.GetCount(ctx)
-    if err != nil {
-        return 0, err
     }
 
     newCount := count + amount
@@ -269,14 +299,17 @@ func (k *Keeper) AddCount(ctx context.Context, sender string, amount uint64) (ui
 }
 ```
 
+Note the shape of the overflow guard. Go wraps silently on unsigned overflow, so `count + amount` exceeding the `uint64` range would leave the counter holding a smaller number with no error raised. Testing the input alone cannot catch that, because the value that overflows is the sum. Comparing `amount` against `math.MaxUint64 - count` tests the result while keeping the comparison itself inside the range. Any module doing unchecked arithmetic on user-supplied values needs the same treatment.
+
 All the business logic, validation, fee charging, state mutation, events, and telemetry, lives in `AddCount`. The `MsgServer` stays thin:
 
 ```go
-func (m msgServer) Add(ctx context.Context, req *types.MsgAddRequest) (*types.MsgAddResponse, error) {
-    newCount, err := m.AddCount(ctx, req.GetSender(), req.GetAdd())
+func (m msgServer) Add(ctx context.Context, request *types.MsgAddRequest) (*types.MsgAddResponse, error) {
+    newCount, err := m.AddCount(ctx, request.GetSender(), request.GetAdd())
     if err != nil {
         return nil, err
     }
+
     return &types.MsgAddResponse{UpdatedCount: newCount}, nil
 }
 ```
@@ -310,13 +343,14 @@ Rather than returning generic errors, `x/counter` defines named sentinel errors 
 ```go
 // keeper/errors.go
 var (
-    ErrNumTooLarge       = errors.Register("counter", 0, "requested integer to add is too large")
-    ErrExceedsMaxAdd     = errors.Register("counter", 1, "add value exceeds max allowed")
-    ErrInsufficientFunds = errors.Register("counter", 2, "insufficient funds to pay add cost")
+    // Codes start at 2: code 0 is reserved for success and code 1 for internal errors.
+    ErrNumTooLarge       = errors.Register("counter", 2, "requested integer to add is too large")
+    ErrExceedsMaxAdd     = errors.Register("counter", 3, "add value exceeds max allowed")
+    ErrInsufficientFunds = errors.Register("counter", 4, "insufficient funds to pay add cost")
 )
 ```
 
-Registered errors produce structured error responses on-chain that clients can match against by code, not just by string. Each error code must be unique within the module and greater than zero (code `1` is reserved for internal SDK errors). To check whether an error is of a specific sentinel type, use `errors.Is(err, ErrInsufficientFunds)` — this works correctly even when the error has been wrapped with additional context via `errorsmod.Wrap` or `errorsmod.Wrapf`.
+Registered errors produce structured error responses on-chain that clients can match against by code, not just by string. Each error code must be unique within the module and start at `2`: code `0` is the ABCI success code, and code `1` is reserved for internal errors. Registering an error as code `0` is accepted silently, but a transaction failing with it reports `code: 0`, which every client reads as success. To check whether an error is of a specific sentinel type, use `errors.Is(err, ErrInsufficientFunds)`. This works correctly even when the error has been wrapped with additional context via `errorsmod.Wrap` or `errorsmod.Wrapf`.
 
 All validation — both stateless field checks and stateful business logic checks — should live in the `msgServer` method or the keeper function it calls. The older `ValidateBasic` method on message types is deprecated: prefer performing all validation inside the message server. If your message type does implement `ValidateBasic`, the SDK still calls it for backward compatibility, but new modules should not rely on it.
 
@@ -378,15 +412,23 @@ func (a AppModule) AutoCLIOptions() *autocliv1.ModuleOptions {
             Service:              "example.counter.Query",
             EnhanceCustomCommand: true,
             RpcCommandOptions: []*autocliv1.RpcCommandOptions{
-                {RpcMethod: "Count", Use: "count", Short: "Query the current counter value"},
+                {
+                    RpcMethod: "Count",
+                    Use:       "count",
+                    Short:     "Query the current counter value",
+                },
             },
         },
         Tx: &autocliv1.ServiceCommandDescriptor{
             Service:              "example.counter.Msg",
             EnhanceCustomCommand: true,
             RpcCommandOptions: []*autocliv1.RpcCommandOptions{
-                {RpcMethod: "Add", Use: "add [amount]", Short: "Add to the counter",
-                    PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "add"}}},
+                {
+                    RpcMethod:      "Add",
+                    Use:            "add [amount]",
+                    Short:          "Add to the counter",
+                    PositionalArgs: []*autocliv1.PositionalArgDescriptor{{ProtoField: "add"}},
+                },
             },
         },
     }
@@ -552,7 +594,7 @@ s.bankKeeper.SendCoinsFromAccountToModuleFn = func(...) error {
 
 ## Gas
 
-`minimum-gas-prices` in `app.toml` sets the minimum fee a node requires before it will accept and relay a transaction. The local dev chain started by `make start` leaves this empty, so transactions are accepted with no fee beyond the `AddCost` module parameter.
+`minimum-gas-prices` in `app.toml` sets the minimum fee a node requires before it will accept and relay a transaction. The local dev chain started by `make start` sets this to `0stake`, so transactions are accepted with no fee beyond the `AddCost` module parameter.
 
 To require a minimum network fee, set it in `app.toml`:
 

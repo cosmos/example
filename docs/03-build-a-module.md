@@ -2,7 +2,7 @@
 
 In [quickstart](./02-quickstart.md), you started a chain and submitted a transaction to increase the counter. In this tutorial, you'll build a simple counter module from scratch. It follows the same overall structure as the full `x/counter`, but uses a stripped-down version so you can focus on the core steps of building and wiring a module yourself.
 
-By the end, you'll have built a working module and wired it into a running chain. For a deeper dive into how modules work in the Cosmos SDK, see [Intro to Modules](https://docs.cosmos.network/sdk/next/learn/concepts/modules). 
+By the end, you'll have built a working module and wired it into a running chain. For a deeper dive into how modules work in the Cosmos SDK, see [Intro to Modules](https://docs.cosmos.network/sdk/next/learn/concepts/modules).
 
 <Note>
 Before continuing, you must follow the [Prerequisites guide](./01-prerequisites.md) to make sure everything is installed.
@@ -623,7 +623,7 @@ Store the counter keeper on `ExampleApp` so the rest of the app can reference it
 
 ```go
 // counter tutorial app wiring 2: add the counter keeper field below
-CounterKeeper         *counterkeeper.Keeper
+CounterKeeper *counterkeeper.Keeper
 ```
 
 ### 3. Store Key
@@ -716,10 +716,31 @@ Open a second terminal and submit a transaction that adds `4` to the counter:
 exampled tx counter add 4 --from alice --chain-id demo --yes
 ```
 
-If the transaction succeeds, the response should include `code: 0`, which means the chain accepted and executed the transaction without an application error:
+If the transaction succeeds, the response should include `code: 0`, which means the chain accepted the
+transaction and it passed validation without an application error:
 
-```
+```text
 code: 0
+codespace: ""
+data: ""
+events: []
+gas_used: "0"
+gas_wanted: "0"
+height: "0"
+info: ""
+logs: []
+raw_log: ""
+timestamp: ""
+tx: null
+txhash: 548D95784704575A347140E05A3ED84A05067DF4AD43F8E6FA20C94FAE8430E0
+```
+
+This is the broadcast acknowledgement, returned before the transaction is in a block, so `height: "0"`
+and the empty fields are expected rather than a sign of failure. To see the executed result, query the
+transaction by its hash:
+
+```bash
+exampled query tx <txhash>
 ```
 
 ### Query the chain
