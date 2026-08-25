@@ -37,33 +37,18 @@ jobs:
           path: cosmos-docs
           persist-credentials: false
 
-      - name: Transform docs → Mintlify format
-        run: |
-          python3 scripts/docs-sync/transform.py \
-            --direction to-mintlify \
-            --input docs/ \
-            --output-dir cosmos-docs/sdk/next/tutorials/example/
-
-      - name: Check for changes
-        id: diff
-        run: |
-          cd cosmos-docs
-          [ -n "$(git status --porcelain sdk/next/tutorials/example/)" ] \
-            && echo "changed=true" >> "$GITHUB_OUTPUT" \
-            || echo "changed=false" >> "$GITHUB_OUTPUT"
-
-      - name: Open or update PR on cosmos/docs
-        if: steps.diff.outputs.changed == 'true'
+      # Select the target branch BEFORE transforming. If an open sync PR exists we
+      # check its branch out while the tree is still clean, so the transform writes
+      # directly onto that branch. Switching branches after the transform would either
+      # abort ("local changes would be overwritten") or, via stash, conflict against
+      # changes the branch already carries.
+      - name: Select target branch
+        id: target
         env:
           GH_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
         run: |
           cd cosmos-docs
 
-          git config user.name  "docs-sync[bot]"
-          git config user.email "docs-sync[bot]@users.noreply.github.com"
-          git remote set-url origin "https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/cosmos/docs.git"
-
-          # Check for an existing open sync PR
           EXISTING=$(gh pr list \
             --repo cosmos/docs \
             --label "docs-sync" \
@@ -74,32 +59,60 @@ jobs:
           if [ -n "$EXISTING" ]; then
             PR_NUMBER=$(echo "$EXISTING" | jq -r '.number')
             BRANCH=$(echo "$EXISTING" | jq -r '.headRefName')
-
-            # Update the existing branch
-            git fetch origin "$BRANCH"
-            git checkout "$BRANCH"
-            git add sdk/next/tutorials/example/
-            git commit -m "docs: sync example tutorials from cosmos/example [docs-sync]"
-            git push origin "$BRANCH"
-
-            gh pr comment "$PR_NUMBER" \
-              --repo cosmos/docs \
-              --body "Sync updated: cosmos/example was updated before this PR merged. Branch has been refreshed — please re-review."
-            echo "Updated existing PR #$PR_NUMBER"
-
+            git fetch origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+            git checkout -B "$BRANCH" "origin/${BRANCH}"
+            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+            echo "Reusing open sync PR #$PR_NUMBER on branch $BRANCH"
           else
-            # No existing PR — create a new branch and open one
             BRANCH="docs-sync/example-$(date +%Y%m%d-%H%M%S)"
             git checkout -b "$BRANCH"
-            git add sdk/next/tutorials/example/
-            git commit -m "docs: sync example tutorials from cosmos/example [docs-sync]"
-            git push origin "$BRANCH"
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            echo "No open sync PR, will create branch $BRANCH"
+          fi
 
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Transform docs → Mintlify format
+        run: |
+          python3 scripts/docs-sync/transform.py \
+            --direction to-mintlify \
+            --input docs/ \
+            --output-dir cosmos-docs/sdk/next/tutorials/example/
+
+      - name: Commit, then open or update the PR on cosmos/docs
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
+          BRANCH: ${{ steps.target.outputs.branch }}
+          PR_NUMBER: ${{ steps.target.outputs.pr_number }}
+        run: |
+          cd cosmos-docs
+
+          git config user.name  "docs-sync[bot]"
+          git config user.email "docs-sync[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/cosmos/docs.git"
+
+          git add sdk/next/tutorials/example/
+
+          if git diff --cached --quiet; then
+            echo "No doc changes to sync, nothing to commit."
+            exit 0
+          fi
+
+          git commit -m "docs: sync example tutorials from cosmos/example [docs-sync]"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr comment "$PR_NUMBER" \
+              --repo cosmos/docs \
+              --body "Sync updated: cosmos/example was updated before this PR merged. Branch has been refreshed, please re-review."
+            echo "Updated existing PR #$PR_NUMBER"
+          else
             gh pr create \
               --repo cosmos/docs \
               --head "$BRANCH" \
               --base main \
               --title "docs: sync example tutorials from cosmos/example" \
               --label "docs-sync" \
-              --body "Auto-synced from cosmos/example. Transforms docs/*.md to sdk/next/tutorials/example/*.mdx. Do not edit these files directly — edit the source in cosmos/example and let the sync bot update them."
+              --body "Auto-synced from cosmos/example. Transforms docs/*.md to sdk/next/tutorials/example/*.mdx. Do not edit these files directly, edit the source in cosmos/example and let the sync bot update them."
+            echo "Opened a new sync PR on branch $BRANCH"
           fi
