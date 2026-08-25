@@ -173,8 +173,9 @@ home directory on every run. Let `make start` create the chain first, then stop 
 # 1. Let make start create ~/.exampleapp, then stop it with Ctrl+C
 make start
 
-# 2. Lower the voting period in the generated genesis
+# 2. Lower both governance voting periods in the generated genesis.
 #    app_state.gov.params.voting_period, for example "20s"
+#    app_state.gov.params.expedited_voting_period must stay strictly shorter, for example "10s"
 vi ~/.exampleapp/config/genesis.json
 
 # 3. Wipe block history so the edited genesis is re-read, keeping keys and config
