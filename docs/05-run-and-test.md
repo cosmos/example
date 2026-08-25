@@ -114,9 +114,84 @@ exampled tx counter add 10 --from alice --chain-id demo --yes
 # Add with a gas limit
 exampled tx counter add 10 --from alice --chain-id demo --gas 200000 --yes
 
-# Update module parameters (requires governance authority)
-exampled tx counter update-params --from alice --chain-id demo --yes
 ```
+
+### Updating module parameters
+
+Counter params are governance-gated. `MsgUpdateParams` accepts only the gov module address as its
+authority, so there is no direct CLI command for it: signing `update-params` with a user key such as
+`alice` always fails with `ErrInvalidSigner`. Params change through a governance proposal instead.
+
+Look up the gov module address for your chain, which is the only valid authority:
+
+```bash
+exampled query auth module-account gov
+```
+
+Write a `proposal.json` containing the message, using that address as `authority`. On the local `demo`
+chain the value is `cosmos10d07y265gmmuvt4z0w9aw880jnsr700j6zn9kn`:
+
+```json
+{
+  "messages": [
+    {
+      "@type": "/example.counter.MsgUpdateParams",
+      "authority": "cosmos10d07y265gmmuvt4z0w9aw880jnsr700j6zn9kn",
+      "params": {
+        "max_add_value": "50",
+        "add_cost": [{"denom": "stake", "amount": "200"}]
+      }
+    }
+  ],
+  "metadata": "ipfs://CID",
+  "deposit": "10000000stake",
+  "title": "Update counter params",
+  "summary": "Set max_add_value to 50 and add_cost to 200stake"
+}
+```
+
+The `deposit` must meet the chain's `min_deposit`, which is `10000000stake` locally. Check it with
+`exampled query gov params`. Then submit and vote:
+
+```bash
+exampled tx gov submit-proposal proposal.json --from alice --chain-id demo --yes
+exampled tx gov vote 1 yes --from alice --chain-id demo --yes
+```
+
+Check progress with `exampled query gov proposals`.
+
+<Note>
+The local chain uses the default 48 hour `voting_period`, so a proposal submitted this way sits in
+`PROPOSAL_STATUS_VOTING_PERIOD` for two days and the params do not change during a normal dev session.
+</Note>
+
+To watch a param change actually take effect locally, shorten the voting period. Editing
+`genesis.json` before `make start` does not work, because `scripts/local_node.sh` deletes the whole
+home directory on every run. Let `make start` create the chain first, then stop it and edit in place:
+
+```bash
+# 1. Let make start create ~/.exampleapp, then stop it with Ctrl+C
+make start
+
+# 2. Lower the voting period in the generated genesis
+#    app_state.gov.params.voting_period, for example "20s"
+vi ~/.exampleapp/config/genesis.json
+
+# 3. Wipe block history so the edited genesis is re-read, keeping keys and config
+exampled comet unsafe-reset-all
+
+# 4. Start the node directly. Do not use make start again, it would delete your edit
+exampled start
+```
+
+Submit and vote as above, wait out the shortened period, and the proposal reaches
+`PROPOSAL_STATUS_PASSED` and `exampled query counter params` reflects the new values.
+
+`exampled tx gov draft-proposal` can generate a skeleton, but it is an interactive terminal picker rather
+than a scriptable command. Its top-level list offers only `text`, `community-pool-spend`,
+`software-upgrade`, `cancel-software-upgrade`, and `other`, and choosing `other` opens a scroll-only list
+of fully qualified message type URLs that typing does not filter. Writing the JSON by hand, as above, is
+the more direct path.
 
 ### Useful flags
 
