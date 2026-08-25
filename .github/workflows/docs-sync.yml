@@ -11,6 +11,10 @@ on:
       - main
     paths:
       - "docs/**"
+  # Manual trigger. Needed because the push trigger only fires on docs/** changes,
+  # so a workflow-only fix cannot re-run the sync, and a sync PR left stale by a
+  # failed run has no way to catch up until the next docs edit.
+  workflow_dispatch:
 
 # Serialize runs. Two overlapping runs would each check out the same revision of
 # the open sync branch, commit divergently, and the loser's push would be
