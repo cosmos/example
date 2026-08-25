@@ -31,27 +31,57 @@ make start
 
 Re-running `make start` resets state automatically. There is no separate reset command.
 
-## Localnet (multi-validator)
+## Localnet (multi-node)
 
-Use localnet when you want a setup that is closer to a real network. It runs multiple validators in Docker so you can test multi-node behavior locally.
+Localnet runs four nodes in Docker to give you a setup closer to a real network than the single-node chain. `scripts/localnet/init.sh` creates a genesis transaction for `node0` only, so the network is **one validator plus three full nodes**, not four validators. The chain ID is `example-localnet`, and each node has a single key named `validator` rather than the `alice` and `bob` accounts used by `make start`.
 
-For a multi-validator setup using Docker:
+Before you begin, note that this section needs Docker running, and that the following host ports must be free: `26656`, `26657`, `1317`, `9090` for `node0`, then `26666`, `26667`, `1318`, `9091` for `node1`, `26676`, `26677`, `1319`, `9092` for `node2`, and `26686`, `26687`, `1320`, `9093` for `node3`.
 
 ```bash
-# Initialize localnet configuration
+# Build the node image and initialize four node directories under build/localnet.
+# Takes several minutes the first time, since it compiles the chain in Docker.
 make localnet-init
 
-# Start all validators
+# Start all four nodes
 make localnet-start
 
-# View logs
+# Follow the logs. This does not exit on its own; press Ctrl+C to stop following
 make localnet-logs
 
 # Stop
 make localnet-stop
 
-# Clean all localnet data
+# Delete build/localnet immediately, without confirming
 make localnet-clean
+```
+
+### Confirm the network is healthy
+
+Each node exposes its own RPC port. Check that every node has found the other three and that they are advancing together:
+
+```bash
+for port in 26657 26667 26677 26687; do
+  curl -s http://localhost:$port/status | grep -o '"latest_block_height":"[0-9]*"'
+  curl -s http://localhost:$port/net_info | grep -o '"n_peers":"[0-9]*"'
+done
+```
+
+Each node should report `"n_peers":"3"` and a block height that climbs on repeated calls.
+
+### Send a transaction
+
+The localnet uses a different chain ID and key name than `make start`, so the commands in the CLI reference below need adjusting. Run them inside a container:
+
+```bash
+docker exec node0 exampled tx counter add 7 \
+  --from validator --chain-id example-localnet \
+  --keyring-backend test --home /data/node0 --yes
+```
+
+Then confirm the state replicated by querying a different node:
+
+```bash
+docker exec node2 exampled query counter count --home /data/node2
 ```
 
 ## CLI reference
@@ -117,9 +147,9 @@ The most common settings to change during development:
 
 | Setting | Default | Description |
 |---|---|---|
-| `minimum-gas-prices` | `"0stake"` | Minimum fee the node accepts before processing a transaction |
+| `minimum-gas-prices` | `"0stake"` | Minimum fee the node accepts before processing a transaction. Set by this chain in `exampled/cmd/commands.go`, not by the SDK, whose own default is empty |
 | `pruning` | `"default"` | How much historical state to keep (`default`, `nothing`, `everything`, `custom`) |
-| `api.enable` | `true` | Enables the REST API on port 1317 |
+| `api.enable` | `true` after `make start` | Enables the REST API on port 1317. The SDK default is `false`; `scripts/local_node.sh` turns it on for local development |
 | `grpc.enable` | `true` | Enables the gRPC server on port 9090 |
 
 ### config.toml
@@ -130,7 +160,7 @@ The settings most likely to change during development:
 |---|---|---|
 | `moniker` | `"test"` | Human-readable name for the node |
 | `log_level` | `"info"` | Log verbosity (`debug`, `info`, `error`) |
-| `consensus.timeout_commit` | `"5s"` | How long to wait after a block is committed before starting the next one |
+| `consensus.timeout_commit` | `"5s"` | How long to wait after a block is committed before starting the next one. The SDK raises CometBFT's own 1s default to 5s |
 | `p2p.seeds` | `""` | Seed nodes to connect to on a live network |
 | `p2p.persistent_peers` | `""` | Peers to maintain permanent connections to |
 
@@ -205,6 +235,12 @@ make test-sim
 
 Simulation requires the `sims` build tag, which the Makefile targets handle automatically.
 
+Each of these runs the simulation across 38 built-in seeds, so expect roughly ten minutes per target. The Makefile deliberately uses smaller values than the SDK defaults of 500 blocks and 200 operations per block, which across 38 seeds take hours. To simulate more deeply, override them:
+
+```bash
+make test-sim-full SIM_NUM_BLOCKS=500 SIM_BLOCK_SIZE=200 SIM_TIMEOUT=4h
+```
+
 ## Lint
 
 Linting is the quickest way to catch style problems and common code-quality issues before CI or code review does.
@@ -225,9 +261,9 @@ make lint-fix
 
 Use this table as a quick reference for choosing the right validation command for the kind of change you made.
 
-| Command | What it validates |
-|---|---|
-| `go test ./x/counter/...` | Keeper, MsgServer, QueryServer in isolation |
-| `go test -run TestE2ETestSuite ./tests/...` | Full transaction and query flow on a live node |
-| `make test-sim-full` | Non-determinism and invariant violations |
-| `make lint` | Code style and static analysis |
+| Command | What it validates | Typical runtime |
+|---|---|---|
+| `go test ./x/counter/...` | Keeper, MsgServer, QueryServer in isolation | seconds |
+| `go test -run TestE2ETestSuite ./tests/...` | Full transaction and query flow on a live node | under a minute |
+| `make test-sim-full` | Non-determinism and invariant violations | around ten minutes |
+| `make lint` | Code style and static analysis | a few minutes |

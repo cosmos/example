@@ -62,8 +62,8 @@ This shows that the fee to increment the counter is stored as a module parameter
 ```yaml
 params:
   add_cost:
-    - amount: "100"
-      denom: stake
+  - amount: "100"
+    denom: stake
   max_add_value: "100"
 ```
 

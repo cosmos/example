@@ -623,7 +623,7 @@ Store the counter keeper on `ExampleApp` so the rest of the app can reference it
 
 ```go
 // counter tutorial app wiring 2: add the counter keeper field below
-CounterKeeper         *counterkeeper.Keeper
+CounterKeeper *counterkeeper.Keeper
 ```
 
 ### 3. Store Key

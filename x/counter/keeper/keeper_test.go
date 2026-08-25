@@ -10,7 +10,7 @@ import (
 	cmttime "github.com/cometbft/cometbft/types/time"
 	"github.com/stretchr/testify/suite"
 
-	storetypes "cosmossdk.io/store/types"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/runtime"
@@ -285,6 +285,38 @@ func (s *KeeperTestSuite) TestAddCount() {
 			amount:       math.MaxUint64,
 			expErr:       true,
 			expPostCount: 100,
+		},
+		{
+			name: "add would overflow with max_add_value disabled - should error",
+			setup: func() {
+				// MaxAddValue of 0 disables the per-add cap, so the overflow
+				// check is the only thing standing between this add and a
+				// counter that silently wraps to a smaller number.
+				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{
+					Count:  math.MaxUint64 - 10,
+					Params: types.Params{MaxAddValue: 0},
+				})
+				s.Require().NoError(err)
+			},
+			sender:       "cosmos1test",
+			amount:       11,
+			expErr:       true,
+			expErrMsg:    "too large",
+			expPostCount: math.MaxUint64 - 10,
+		},
+		{
+			name: "add to the exact uint64 limit - should succeed",
+			setup: func() {
+				err := s.keeper.InitGenesis(s.ctx, &types.GenesisState{
+					Count:  math.MaxUint64 - 10,
+					Params: types.Params{MaxAddValue: 0},
+				})
+				s.Require().NoError(err)
+			},
+			sender:       "cosmos1test",
+			amount:       10,
+			expErr:       false,
+			expPostCount: math.MaxUint64,
 		},
 		{
 			name: "add exceeds max_add_value - should error",

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS build-env
+FROM golang:1.26-alpine AS build-env
 
 # Install build dependencies
 RUN apk add --no-cache make git libc-dev bash gcc linux-headers
@@ -13,8 +13,13 @@ RUN go mod download
 # Copy source and build
 COPY . .
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# Declared without defaults so BuildKit supplies the build platform. Hardcoding a
+# GOARCH here cross-compiles for that architecture regardless of the host, and the
+# resulting binary then runs under emulation. Emulated x86 mis-executes the AVX2
+# chacha20poly1305 assembly, which breaks the CometBFT P2P handshake and leaves
+# localnet nodes unable to peer with each other.
+ARG TARGETOS
+ARG TARGETARCH
 
 RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o /go/bin/exampled ./exampled
 

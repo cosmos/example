@@ -8,12 +8,12 @@ This tutorial is intended for macOS and Linux systems. Other systems may have ad
 
 ## Go
 
-The example chain requires Go 1.25 or higher. 
+The example chain requires Go 1.26 or higher. 
 
 ```bash
 go version
-# go version go1.25.0 linux/amd64   # Linux
-# go version go1.25.0 darwin/arm64  # macOS
+# go version go1.26.5 linux/amd64   # Linux
+# go version go1.26.5 darwin/arm64  # macOS
 ```
 
 If Go is not installed, download it from [go.dev/dl](https://go.dev/dl).
