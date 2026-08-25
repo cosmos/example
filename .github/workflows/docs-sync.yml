@@ -12,6 +12,15 @@ on:
     paths:
       - "docs/**"
 
+# Serialize runs. Two overlapping runs would each check out the same revision of
+# the open sync branch, commit divergently, and the loser's push would be
+# rejected as non-fast-forward, silently dropping its update. Queue instead of
+# cancelling: the transform is deterministic from docs/, so the last run to
+# finish always produces the correct final state.
+concurrency:
+  group: docs-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     name: Sync docs to cosmos/docs
