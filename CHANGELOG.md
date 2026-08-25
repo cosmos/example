@@ -4,6 +4,32 @@ All notable changes to this repository are tracked here for agent context.
 
 ## [Unreleased]
 
+### Tutorial Verification Pass
+
+Ran `03-build-a-module.md` end to end from a clean `origin/tutorial/start` checkout, twice: once with the code blocks machine-extracted from the doc (to test the code) and once by an agent working only from the prose with no access to the finished module on `main` (to test the instructions). Both reached a working chain. `tx counter add 4` returned `code: 0` and `query counter count` returned `count: "4"`. No blocking failures, no step required debugging. Two doc fixes came out of it:
+
+- `03-build-a-module.md` Step 12: replaced the single-line `code: 0` sample with the real 13-line broadcast response and explained it. The response is the mempool acknowledgement returned before inclusion in a block, so `height: "0"` and `gas_used: "0"` are expected. As written, a reader had good reason to read a successful transaction as a failure and start debugging it. Added a pointer to `exampled query tx <txhash>` for the executed result.
+- `05-run-and-test.md` CLI reference: `exampled tx counter update-params --from alice` can never succeed. `MsgUpdateParams` only accepts the gov module address as authority, so signing with a user key always returns `ErrInvalidSigner`, and the command takes no params flags. Replaced it with an "Updating module parameters" section carrying a working `proposal.json`, the real `min_deposit`, the submit and vote commands, and the caveat that the default 48 hour `voting_period` means the change does not land during a normal dev session.
+
+Deliberately not documented, though both were observed and confirmed: the `.gitkeep` files left in `x/counter/` and `proto/example/counter/v1/` on `tutorial/start` (Step 1 calls the directories empty, which is imprecise but harms nothing, and no step needs to remove them); and the proto package/directory mismatch, where the files declare `package example.counter` inside a `v1/` directory. The mismatch is real and load-bearing, since the AutoCLI service strings in Step 9 resolve against the package name rather than the path, and renaming the package makes every `exampled` command panic with `can't find service example.counter.Query: proto: not found`. It is left undocumented because a reader following the tutorial copies the blocks verbatim and never renames anything; the failure only surfaces when adapting the module for another chain, which is out of scope here.
+
+Second pass, verifying the remaining docs against a live chain rather than by reading:
+
+- `02-quickstart.md`: every documented output confirmed byte for byte on a fresh chain. `query counter count` returns `{}`, the params YAML matches, `tx counter add 5` then `query counter count` returns `count: "5"`. The 13-line broadcast response added to `03` Step 12 reproduced identically here, on a separate run and binary.
+- `04-counter-walkthrough.md`: all 21 Go snippets checked against `x/counter/`. Every function signature matches the source verbatim. Prose claims in this file are still unverified.
+- `05-run-and-test.md` test layers: `go test ./x/counter/...` passes, the targeted `-run TestKeeperTestSuite/TestAddCount` invocation runs all 9 subtests, `TestE2ETestSuite` passes 5/5 in 26s, and `make test-sim-full` passes all 38 seeds in 122s.
+- `05-run-and-test.md` localnet: run end to end. All four nodes report `"n_peers":"3"` and advance together, exactly as documented. The `docker exec node0 ... tx counter add 7` command works as written and replicates: `node2` and `node3` both return `count: "7"`. Validator count is 1, confirming the "one validator plus three full nodes" note. `Dockerfile` correctly declares `ARG TARGETOS`/`ARG TARGETARCH` with no defaults, so nodes peer without the emulated-AVX2 handshake failure.
+- `05-run-and-test.md` node config: all 9 values in the `app.toml`/`config.toml` tables confirmed against a live `~/.exampleapp`.
+
+Corrections made to this pass's own first draft, both caught by testing claims instead of trusting them:
+
+- The `05` gov section initially told readers to lower `voting_period` in `~/.exampleapp/config/genesis.json` before running `make start`. That does not work: `scripts/local_node.sh` line 7 deletes the entire home directory on every run, so the edit is destroyed. Replaced with the verified sequence (`make start` once, stop, edit genesis, `exampled comet unsafe-reset-all`, then `exampled start` directly). Confirmed end to end: proposal reached `PROPOSAL_STATUS_PASSED` and `query counter params` returned the new `add_cost: 200` / `max_add_value: 50`.
+- The same section claimed `MsgUpdateParams` can be reached by choosing `other` in `draft-proposal` and searching by name. Only the verifiable part is now stated: the top-level list contains just `text`, `community-pool-spend`, `software-upgrade`, `cancel-software-upgrade`, and `other`, and `other` opens a scroll-only list of type URLs that typing does not filter. Whether the counter message appears in that list was not confirmed, so the doc no longer asserts it and points at hand-written JSON instead.
+
+Still unverified after this pass: the prose claims (not code) in `04-counter-walkthrough.md`, and how the new `<Note>` and JSON blocks render on the live Mintlify site.
+
+Known issues found and deliberately left alone in this pass: the doc's Go blocks use 4-space indentation, so all seven files a reader creates fail `gofmt -l` (`make lint` passes anyway, 0 issues, since gofmt is not in the golangci config); the seven `app.go` wiring blocks are flush-left and paste misaligned into indented context, and each includes its own marker comment as line 1, so a select-all paste duplicates the marker; `NewKeeper` takes a `cdc codec.Codec` the minimal module never uses, kept for signature parity with `main`; Step 12 gives no guidance to wait for the first block before submitting; `make proto-image-build` cold-builds Docker layers for several minutes with no warning that this is expected.
+
 ### Docs Updates for SDK v0.55 Upgrade
 
 - `01-prerequisites.md`: bumped required Go version from 1.25 to 1.26 to match `go.mod` (`go 1.26.5`) after the SDK/CometBFT upgrade. This was the only doc breakage caused by the upgrade itself; no doc references `traceStore`, the `cosmossdk.io/store` → `cosmos-sdk/store/v2` move, or the dropped legacy-subspace args.

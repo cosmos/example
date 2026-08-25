@@ -716,10 +716,31 @@ Open a second terminal and submit a transaction that adds `4` to the counter:
 exampled tx counter add 4 --from alice --chain-id demo --yes
 ```
 
-If the transaction succeeds, the response should include `code: 0`, which means the chain accepted and executed the transaction without an application error:
+If the transaction succeeds, the response should include `code: 0`, which means the chain accepted the
+transaction and it passed validation without an application error:
 
-```
+```text
 code: 0
+codespace: ""
+data: ""
+events: []
+gas_used: "0"
+gas_wanted: "0"
+height: "0"
+info: ""
+logs: []
+raw_log: ""
+timestamp: ""
+tx: null
+txhash: 548D95784704575A347140E05A3ED84A05067DF4AD43F8E6FA20C94FAE8430E0
+```
+
+This is the broadcast acknowledgement, returned before the transaction is in a block, so `height: "0"`
+and the empty fields are expected rather than a sign of failure. To see the executed result, query the
+transaction by its hash:
+
+```bash
+exampled query tx <txhash>
 ```
 
 ### Query the chain
