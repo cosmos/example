@@ -36,6 +36,11 @@ jobs:
       - name: Checkout example repo
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -92,6 +97,25 @@ jobs:
             --input docs/ \
             --output-dir cosmos-docs/sdk/next/tutorials/example/
 
+      # The example tutorials are the one exception to cosmos/docs' version
+      # freeze. They tell the reader to `git clone` this repo and
+      # `git checkout main`, so they document whatever main is now rather than a
+      # released version, and a frozen latest/ copy just describes code the
+      # reader is not running. Before this step existed, latest/ sat two syncs
+      # behind for months.
+      #
+      # The script and the reasoning live in cosmos/docs, so only the call is
+      # here. Skipped if it is absent, which keeps this workflow working whether
+      # it merges before or after the cosmos/docs side.
+      - name: Forward-port the tutorials into latest/
+        run: |
+          cd cosmos-docs
+          if [ ! -f scripts/sync-next-to-latest.js ]; then
+            echo "::warning::scripts/sync-next-to-latest.js is not on cosmos/docs main yet, skipping the forward-port. latest/ will lag until it lands."
+            exit 0
+          fi
+          node scripts/sync-next-to-latest.js sdk/next/tutorials/example/
+
       - name: Commit, then open or update the PR on cosmos/docs
         env:
           GH_TOKEN: ${{ secrets.DOCS_REPO_TOKEN }}
@@ -105,6 +129,7 @@ jobs:
           git remote set-url origin "https://x-access-token:${{ secrets.DOCS_REPO_TOKEN }}@github.com/cosmos/docs.git"
 
           git add sdk/next/tutorials/example/
+          git add sdk/latest/tutorials/example/
 
           if git diff --cached --quiet; then
             echo "No doc changes to sync, nothing to commit."
