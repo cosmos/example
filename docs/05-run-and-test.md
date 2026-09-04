@@ -86,7 +86,7 @@ docker exec node2 exampled query counter count --home /data/node2
 
 ## CLI reference
 
-Once the chain is running, these are the core [CLI](https://docs.cosmos.network/sdk/next/learn/concepts/cli-grpc-rest#cli) commands you'll use to inspect state and submit transactions.
+Once the chain is running, these are the core [CLI](https://docs.cosmos.network/sdk/next/learn/concepts/cli-grpc-rest#cli) commands you'll use to inspect state and submit transactions. For the gRPC and REST equivalents of every query and transaction the standard modules define, see the [API reference](https://docs.cosmos.network/sdk/next/api-reference/index).
 
 ### Query commands
 
