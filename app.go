@@ -64,9 +64,6 @@ import (
 	"github.com/cosmos/gogoproto/proto"
 
 	// counter tutorial app wiring 1: add counter imports below
-	counter "github.com/cosmos/example/x/counter"
-	counterkeeper "github.com/cosmos/example/x/counter/keeper"
-	countertypes "github.com/cosmos/example/x/counter/types"
 )
 
 const (
@@ -83,7 +80,6 @@ var (
 	maccPerms = map[string][]string{
 		authtypes.FeeCollectorName:          nil,
 		distrtypes.ModuleName:               nil,
-		countertypes.ModuleName:             nil,
 		stakingtypes.BondedPoolName:         {authtypes.Burner, authtypes.Staking},
 		stakingtypes.NotBondedPoolName:      {authtypes.Burner, authtypes.Staking},
 		stakingtypes.KeyRotationFeePoolName: {authtypes.Burner},
@@ -117,7 +113,6 @@ type ExampleApp struct {
 	SlashingKeeper        slashingkeeper.Keeper
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
 	// counter tutorial app wiring 2: add the counter keeper field below
-	CounterKeeper *counterkeeper.Keeper
 
 	// the module manager
 	ModuleManager      *module.Manager
@@ -173,7 +168,6 @@ func NewExampleApp(
 		govtypes.StoreKey,
 		consensusparamtypes.StoreKey,
 		// counter tutorial app wiring 3: add the counter store key below
-		countertypes.StoreKey,
 	)
 
 	if err := bApp.RegisterStreamingServices(appOpts, keys); err != nil {
@@ -282,7 +276,6 @@ func NewExampleApp(
 	)
 
 	// counter tutorial app wiring 4: create the counter keeper below
-	app.CounterKeeper = counterkeeper.NewKeeper(runtime.NewKVStoreService(keys[countertypes.StoreKey]), appCodec, app.BankKeeper)
 
 	app.ModuleManager = module.NewManager(
 		genutil.NewAppModule(
@@ -298,7 +291,6 @@ func NewExampleApp(
 		staking.NewAppModule(appCodec, app.StakingKeeper, app.AccountKeeper, app.BankKeeper),
 		vesting.NewAppModule(app.AccountKeeper, app.BankKeeper),
 		// counter tutorial app wiring 5: register the counter module below
-		counter.NewAppModule(appCodec, app.CounterKeeper),
 	)
 
 	// BasicModuleManager defines the module BasicManager is in charge of setting up basic,
@@ -332,14 +324,12 @@ func NewExampleApp(
 		distrtypes.ModuleName,
 		slashingtypes.ModuleName,
 		stakingtypes.ModuleName,
-		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	)
 	app.ModuleManager.SetOrderEndBlockers(
 		banktypes.ModuleName,
 		govtypes.ModuleName,
 		stakingtypes.ModuleName,
-		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	)
 	// NOTE: The genutils module must occur after staking so that pools are
@@ -355,7 +345,6 @@ func NewExampleApp(
 		consensusparamtypes.ModuleName,
 		vestingtypes.ModuleName,
 		// counter tutorial app wiring 6: add the counter module to genesis order below
-		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 
@@ -369,7 +358,6 @@ func NewExampleApp(
 		govtypes.ModuleName,
 		vestingtypes.ModuleName,
 		// counter tutorial app wiring 7: add the counter module to export order below
-		countertypes.ModuleName,
 		genutiltypes.ModuleName,
 	}
 
